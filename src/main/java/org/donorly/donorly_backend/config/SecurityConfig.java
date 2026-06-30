@@ -34,14 +34,8 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public: login endpoints only
                 .requestMatchers("/api/auth/admin/login", "/api/auth/ambassador/login", "/api/auth/logout").permitAll()
-                // TEMPORARY — remove this line once MigrationController.java is deleted post-migration
                 .requestMatchers("/api/admin/migrate-users").permitAll()
-                // Everything else under /api/** requires a valid JWT (ADMIN or AMBASSADOR).
-                // Fine-grained "is this YOUR data / your downline's data" checks happen
-                // in the controllers/services, since path matchers can't express
-                // "only your own ambassador subtree".
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll()
             )
@@ -57,6 +51,7 @@ public class SecurityConfig {
                 "http://127.0.0.1:3000",
                 "https://donorly.org",
                 "https://www.donorly.org",
+                "https://donorly-hq.github.io",
                 "null"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
