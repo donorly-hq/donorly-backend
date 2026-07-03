@@ -1,42 +1,36 @@
 package org.donorly.donorly_backend.service;
 
+import lombok.RequiredArgsConstructor;
 import org.donorly.donorly_backend.model.Volunteer;
 import org.donorly.donorly_backend.repository.VolunteerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class VolunteerService {
 
-    @Autowired
-    private VolunteerRepository volunteerRepository;
+    private final VolunteerRepository volunteerRepository;
 
-    public List<Volunteer> getAllVolunteers() {
+    public List<Volunteer> getAll() {
         return volunteerRepository.findAll();
     }
 
-    public Optional<Volunteer> getVolunteerById(String id) {
+    public Optional<Volunteer> getById(String id) {
         return volunteerRepository.findById(id);
     }
 
-    public List<Volunteer> getVolunteersByRole(String role) {
-        return volunteerRepository.findByRole(role);
+    public List<Volunteer> getByAmbassadorId(String ambassadorId) {
+        return volunteerRepository.findByAmbassadorId(ambassadorId);
     }
 
-    public Volunteer createVolunteer(Volunteer volunteer) {
-        volunteer.setCreatedAt(LocalDateTime.now());
+    public Volunteer save(Volunteer volunteer) {
         return volunteerRepository.save(volunteer);
     }
 
-    public Volunteer updateVolunteer(String id, Volunteer updated) {
-        updated.setId(id);
-        return volunteerRepository.save(updated);
-    }
-
-    public void deleteVolunteer(String id) {
+    public void delete(String id) {
         volunteerRepository.deleteById(id);
     }
 }
