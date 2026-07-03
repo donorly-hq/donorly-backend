@@ -1,45 +1,36 @@
 package org.donorly.donorly_backend.service;
 
+import lombok.RequiredArgsConstructor;
 import org.donorly.donorly_backend.model.TownHall;
 import org.donorly.donorly_backend.repository.TownHallRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class TownHallService {
 
-    @Autowired
-    private TownHallRepository townHallRepository;
+    private final TownHallRepository townHallRepository;
 
-    public List<TownHall> getAllTownHalls() {
+    public List<TownHall> getAll() {
         return townHallRepository.findAll();
     }
 
-    public Optional<TownHall> getTownHallById(String id) {
+    public Optional<TownHall> getById(String id) {
         return townHallRepository.findById(id);
     }
 
-    public List<TownHall> getByHostAmbassador(String ambassadorId) {
-        return townHallRepository.findByHostAmbassadorId(ambassadorId);
-    }
-
-    public TownHall createTownHall(TownHall townHall) {
-        townHall.setCreatedAt(LocalDateTime.now());
-        if (townHall.getStatus() == null) {
-            townHall.setStatus("planned");
-        }
+    public TownHall save(TownHall townHall) {
         return townHallRepository.save(townHall);
     }
 
-    public TownHall updateTownHall(String id, TownHall updated) {
-        updated.setId(id);
-        return townHallRepository.save(updated);
+    public void delete(String id) {
+        townHallRepository.deleteById(id);
     }
 
-    public void deleteTownHall(String id) {
-        townHallRepository.deleteById(id);
+    public List<TownHall> getByAmbassador(String ambassadorId) {
+        return townHallRepository.findByHostAmbassadorId(ambassadorId);
     }
 }
