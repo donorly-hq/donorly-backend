@@ -11,12 +11,8 @@
   <groupId>org.donorly</groupId>
   <artifactId>donorly-backend</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <name/>
-  <description/>
-  <url/>
-  <licenses><license/></licenses>
-  <developers><developer/></developers>
-  <scm><connection/><developerConnection/><tag/><url/></scm>
+  <name>donorly-backend</name>
+  <description>Donorly multi-tenant fundraising SaaS backend</description>
 
   <properties>
     <java.version>17</java.version>
@@ -24,7 +20,7 @@
 
   <dependencies>
 
-    <!-- REPLACED: MongoDB → PostgreSQL + JPA -->
+    <!-- Persistence: PostgreSQL + JPA -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -32,6 +28,20 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Flyway database migrations.
+         Spring Boot 4 modularized auto-configuration: flyway-core alone no
+         longer triggers migrations, so the starter (which pulls in the
+         spring-boot-flyway auto-configuration module) is required. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-flyway</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
       <scope>runtime</scope>
     </dependency>
 
@@ -77,6 +87,18 @@
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
       <optional>true</optional>
+    </dependency>
+
+    <!-- Health check endpoint for Railway deployment -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Email (Spring Mail + Jakarta Mail) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
     </dependency>
 
     <!-- Test -->

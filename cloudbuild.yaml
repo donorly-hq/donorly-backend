@@ -1,0 +1,50 @@
+substitutions:
+  _REGION: us-central1
+  _REPO: donorly
+  _SERVICE: donorly-backend
+
+steps:
+  # Build the Docker image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - .
+
+  # Push to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
+
+  # Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - --set-env-vars=SPRING_PROFILES_ACTIVE=gcp
+      - --set-secrets=JWT_SECRET=donorly-jwt-secret:latest,PGPASSWORD=donorly-db-password:latest,MAIL_PASSWORD=donorly-mail-password:latest
+      - --set-env-vars=PGHOST=hayabusa.proxy.rlwy.net,PGPORT=29331,PGDATABASE=railway,PGUSER=postgres
+      - --set-env-vars=MAIL_USERNAME=sam@donorly.com,MAIL_FROM_NAME=Donorly
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,0 +1,38 @@
+package org.donorly.backend.repository;
+
+import org.donorly.backend.model.Pledge;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface PledgeRepository extends JpaRepository<Pledge, UUID> {
+    List<Pledge> findByOrganizationId(UUID organizationId);
+    List<Pledge> findByOrganizationIdAndCampaignId(UUID organizationId, UUID campaignId);
+    List<Pledge> findByOrganizationIdAndDonorId(UUID organizationId, UUID donorId);
+    Optional<Pledge> findByIdAndOrganizationId(UUID id, UUID organizationId);
+
+    @Query("select coalesce(sum(p.amount), 0) from Pledge p where p.organizationId = :orgId")
+    BigDecimal sumPledgedByOrganization(@Param("orgId") UUID orgId);
+
+    @Query("select coalesce(sum(p.collectedAmount), 0) from Pledge p where p.organizationId = :orgId")
+    BigDecimal sumCollectedByOrganization(@Param("orgId") UUID orgId);
+
+    @Query("select coalesce(sum(p.amount), 0) from Pledge p where p.organizationId = :orgId and p.campaignId = :campaignId")
+    BigDecimal sumPledgedByCampaign(@Param("orgId") UUID orgId, @Param("campaignId") UUID campaignId);
+
+    @Query("select coalesce(sum(p.collectedAmount), 0) from Pledge p where p.organizationId = :orgId and p.campaignId = :campaignId")
+    BigDecimal sumCollectedByCampaign(@Param("orgId") UUID orgId, @Param("campaignId") UUID campaignId);
+
+    @Query("select coalesce(sum(p.amount), 0) from Pledge p where p.organizationId = :orgId and p.donorId in :donorIds")
+    BigDecimal sumPledgedByDonors(@Param("orgId") UUID orgId, @Param("donorIds") java.util.Collection<UUID> donorIds);
+
+    @Query("select coalesce(sum(p.collectedAmount), 0) from Pledge p where p.organizationId = :orgId and p.donorId in :donorIds")
+    BigDecimal sumCollectedByDonors(@Param("orgId") UUID orgId, @Param("donorIds") java.util.Collection<UUID> donorIds);
+
+    long countByOrganizationIdAndDonorIdIn(UUID organizationId, java.util.Collection<UUID> donorIds);
+}
