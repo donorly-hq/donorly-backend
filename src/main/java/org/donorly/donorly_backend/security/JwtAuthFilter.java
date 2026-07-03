@@ -5,7 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.donorly.donorly_backend.repository.UserRepository;
+import org.donorly.donorly_backend.repository.AppUserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,13 +14,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
+    private final AppUserRepository appUserRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -42,7 +43,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             // Single session enforcement for ambassadors
             if ("AMBASSADOR".equals(role)) {
-                var userOpt = userRepository.findById(userId);
+                var userOpt = appUserRepository.findById(UUID.fromString(userId));
                 if (userOpt.isEmpty() || !jti.equals(userOpt.get().getActiveSessionToken())) {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Session expired or logged in elsewhere");
                     return;
