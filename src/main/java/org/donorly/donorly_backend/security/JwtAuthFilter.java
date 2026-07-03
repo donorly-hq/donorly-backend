@@ -39,16 +39,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             String userId = jwtUtil.extractUserId(token);
             String role = jwtUtil.extractRole(token);
-            String jti = jwtUtil.extractJti(token);
-
-            // Single session enforcement for ambassadors
-            if ("AMBASSADOR".equals(role)) {
-                var userOpt = appUserRepository.findById(UUID.fromString(userId));
-                if (userOpt.isEmpty() || !jti.equals(userOpt.get().getActiveSessionToken())) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Session expired or logged in elsewhere");
-                    return;
-                }
-            }
 
             var auth = new UsernamePasswordAuthenticationToken(
                     userId,

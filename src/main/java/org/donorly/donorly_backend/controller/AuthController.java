@@ -60,9 +60,6 @@ public class AuthController {
         if (!"active".equals(user.getUserStatus())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account is inactive");
         }
-        if (user.getActiveSessionToken() != null) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("Already logged in elsewhere");
-        }
 
         String ambassadorIdStr = user.getAmbassadorId() == null ? null : user.getAmbassadorId().toString();
         String token = jwtUtil.generateToken(user.getUserId().toString(), user.getRole(), ambassadorIdStr);
