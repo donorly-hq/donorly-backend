@@ -53,6 +53,9 @@ public class Ambassador {
     @Column(name = "parent_ambassador_id")
     private UUID parentAmbassadorId;
 
+    @Column(name = "pledge_goal")
+    private java.math.BigDecimal pledgeGoal;
+
     @ElementCollection
     @CollectionTable(name = "ambassador_ancestor_path", joinColumns = @JoinColumn(name = "ambassador_id"))
     @Column(name = "ancestor_id")
@@ -82,6 +85,8 @@ public class Ambassador {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public UUID getParentAmbassadorId() { return parentAmbassadorId; }
     public void setParentAmbassadorId(UUID parentAmbassadorId) { this.parentAmbassadorId = parentAmbassadorId; }
+    public java.math.BigDecimal getPledgeGoal() { return pledgeGoal; }
+    public void setPledgeGoal(java.math.BigDecimal pledgeGoal) { this.pledgeGoal = pledgeGoal; }
     public java.util.List<UUID> getAncestorPath() { return ancestorPath; }
     public void setAncestorPath(java.util.List<UUID> ancestorPath) { this.ancestorPath = ancestorPath; }
 }

@@ -1,7 +1,8 @@
 package org.donorly.donorly_backend.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.donorly.donorly_backend.model.Ambassador;
+import org.donorly.donorly_backend.dto.AmbassadorCreateRequest;
+import org.donorly.donorly_backend.dto.AmbassadorResponseDto;
 import org.donorly.donorly_backend.service.AmbassadorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,47 +19,44 @@ public class AmbassadorController {
     private final AmbassadorService ambassadorService;
 
     @GetMapping
-    public List<Ambassador> getAll() {
-        return ambassadorService.getAll();
+    public List<AmbassadorResponseDto> getAll() {
+        return ambassadorService.getAllDto();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Ambassador> getById(@PathVariable UUID id) {
-        return ambassadorService.getById(id)
+    public ResponseEntity<AmbassadorResponseDto> getById(@PathVariable UUID id) {
+        return ambassadorService.getByIdDto(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public Ambassador create(@RequestBody Ambassador ambassador) {
-        return ambassadorService.save(ambassador);
+    public AmbassadorResponseDto create(@RequestBody AmbassadorCreateRequest request) {
+        return ambassadorService.createRootFromRequest(request);
     }
 
     @PostMapping("/root")
     @PreAuthorize("hasRole('ADMIN')")
-    public Ambassador createRoot(@RequestBody Ambassador ambassador) {
-        return ambassadorService.createRootAmbassador(ambassador);
+    public AmbassadorResponseDto createRoot(@RequestBody AmbassadorCreateRequest request) {
+        return ambassadorService.createRootFromRequest(request);
     }
 
     @PostMapping("/{id}/sub-ambassadors")
-    public Ambassador createSub(@PathVariable UUID id, @RequestBody Ambassador ambassador) {
-        return ambassadorService.createSubAmbassador(id, ambassador);
+    public AmbassadorResponseDto createSub(@PathVariable UUID id, @RequestBody AmbassadorCreateRequest request) {
+        return ambassadorService.createSubFromRequest(id, request);
     }
 
     @GetMapping("/{id}/downline")
-    public List<Ambassador> getDownline(@PathVariable UUID id) {
-        return ambassadorService.getDownline(id);
-    }
-
-    @PutMapping("/{id}")
-    public Ambassador update(@PathVariable UUID id, @RequestBody Ambassador ambassador) {
-        ambassador.setAmbassadorId(id);
-        return ambassadorService.save(ambassador);
+    public List<AmbassadorResponseDto> getDownline(@PathVariable UUID id) {
+        return ambassadorService.getDownlineDto(id);
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<Ambassador> deactivate(@PathVariable UUID id) {
-        return ResponseEntity.ok(ambassadorService.deactivate(id));
+    public ResponseEntity<AmbassadorResponseDto> deactivate(@PathVariable UUID id) {
+        ambassadorService.deactivate(id);
+        return ambassadorService.getByIdDto(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/handover-to/{targetId}")

@@ -73,6 +73,19 @@ public class Pledge {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
+    // Portal-compatibility fields (see V4 migration)
+    @Column(name = "donation_type")
+    private String donationType;
+
+    @Column(name = "is_corporate_match", nullable = false)
+    private boolean corporateMatch = false;
+
+    @Column(name = "employer_name")
+    private String employerName;
+
+    @Column(name = "preferred_payment_method")
+    private String preferredPaymentMethod;
+
     public UUID getPledgeId() { return pledgeId; }
     public void setPledgeId(UUID pledgeId) { this.pledgeId = pledgeId; }
     public UUID getTenantId() { return tenantId; }
@@ -109,4 +122,12 @@ public class Pledge {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public Instant getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
+    public String getDonationType() { return donationType; }
+    public void setDonationType(String donationType) { this.donationType = donationType; }
+    public boolean isCorporateMatch() { return corporateMatch; }
+    public void setCorporateMatch(boolean corporateMatch) { this.corporateMatch = corporateMatch; }
+    public String getEmployerName() { return employerName; }
+    public void setEmployerName(String employerName) { this.employerName = employerName; }
+    public String getPreferredPaymentMethod() { return preferredPaymentMethod; }
+    public void setPreferredPaymentMethod(String preferredPaymentMethod) { this.preferredPaymentMethod = preferredPaymentMethod; }
 }

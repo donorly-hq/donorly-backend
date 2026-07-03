@@ -1,6 +1,8 @@
 package org.donorly.donorly_backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.donorly.donorly_backend.dto.AmbassadorCreateRequest;
+import org.donorly.donorly_backend.dto.AmbassadorResponseDto;
 import org.donorly.donorly_backend.model.Ambassador;
 import org.donorly.donorly_backend.model.AppUser;
 import org.donorly.donorly_backend.model.Pledge;
@@ -10,10 +12,13 @@ import org.donorly.donorly_backend.repository.PledgeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * KNOWN GAP: the old version of handoverTo() also transferred
@@ -31,6 +36,70 @@ public class AmbassadorService {
     private final AmbassadorRepository ambassadorRepository;
     private final PledgeRepository pledgeRepository;
     private final AppUserRepository appUserRepository;
+
+    private static final UUID DEFAULT_TENANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    public List<AmbassadorResponseDto> getAllDto() {
+        return ambassadorRepository.findAll().stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public Optional<AmbassadorResponseDto> getByIdDto(UUID id) {
+        return ambassadorRepository.findById(id).map(this::toDto);
+    }
+
+    public List<AmbassadorResponseDto> getDownlineDto(UUID ambassadorId) {
+        return ambassadorRepository.findByAncestorPathContains(ambassadorId)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AmbassadorResponseDto createRootFromRequest(AmbassadorCreateRequest req) {
+        Ambassador a = fromRequest(req);
+        a.setAncestorPath(new ArrayList<>());
+        a.setParentAmbassadorId(null);
+        return toDto(ambassadorRepository.save(a));
+    }
+
+    @Transactional
+    public AmbassadorResponseDto createSubFromRequest(UUID parentId, AmbassadorCreateRequest req) {
+        Ambassador parent = ambassadorRepository.findById(parentId)
+                .orElseThrow(() -> new RuntimeException("Parent ambassador not found"));
+        Ambassador a = fromRequest(req);
+        List<UUID> ancestorPath = new ArrayList<>(
+                parent.getAncestorPath() == null ? List.of() : parent.getAncestorPath());
+        ancestorPath.add(parentId);
+        a.setParentAmbassadorId(parentId);
+        a.setAncestorPath(ancestorPath);
+        return toDto(ambassadorRepository.save(a));
+    }
+
+    private Ambassador fromRequest(AmbassadorCreateRequest req) {
+        Ambassador a = new Ambassador();
+        a.setTenantId(DEFAULT_TENANT_ID);
+        a.setDisplayName(req.name);
+        a.setEmailAddress(req.email);
+        a.setPhoneNumber(req.phone);
+        a.setAmbassadorCode(req.code);
+        a.setPledgeGoal(req.pledgeGoal == null ? BigDecimal.valueOf(10000) : req.pledgeGoal);
+        a.setActive(true);
+        return a;
+    }
+
+    private AmbassadorResponseDto toDto(Ambassador a) {
+        AmbassadorResponseDto dto = new AmbassadorResponseDto();
+        dto.id = a.getAmbassadorId();
+        dto.name = a.getDisplayName();
+        dto.email = a.getEmailAddress();
+        dto.phone = a.getPhoneNumber();
+        dto.city = null;
+        dto.code = a.getAmbassadorCode();
+        dto.pledgeGoal = a.getPledgeGoal();
+        dto.totalPledged = pledgeRepository.sumPledgedAmountByAmbassadorId(a.getAmbassadorId());
+        dto.status = a.isActive() ? "Active" : "Inactive";
+        dto.createdAt = a.getCreatedAt() == null ? null : DateTimeFormatter.ISO_INSTANT.format(a.getCreatedAt());
+        dto.parentAmbassadorId = a.getParentAmbassadorId();
+        return dto;
+    }
 
     public List<Ambassador> getAll() {
         return ambassadorRepository.findAll();

@@ -2,6 +2,7 @@ package org.donorly.donorly_backend.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.donorly.donorly_backend.model.AppUser;
+import org.donorly.donorly_backend.repository.AmbassadorRepository;
 import org.donorly.donorly_backend.repository.AppUserRepository;
 import org.donorly.donorly_backend.security.JwtUtil;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class AuthController {
 
     private final AppUserRepository appUserRepository;
+    private final AmbassadorRepository ambassadorRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
@@ -29,20 +31,24 @@ public class AuthController {
 
         AppUser user = appUserRepository.findByEmailAddress(email).orElse(null);
         if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
         }
         if (!"ADMIN".equals(user.getRole())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an admin account");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Not an admin account"));
         }
         if (!"active".equals(user.getUserStatus())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account is inactive");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Account is inactive"));
         }
 
         String token = jwtUtil.generateToken(user.getUserId().toString(), user.getRole(), null);
         user.setLastLoginAt(Instant.now());
         appUserRepository.save(user);
 
-        return ResponseEntity.ok(Map.of("token", token, "role", user.getRole()));
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "role", user.getRole(),
+                "name", user.getFullName() == null ? "Admin" : user.getFullName()
+        ));
     }
 
     @PostMapping("/ambassador/login")
@@ -52,13 +58,13 @@ public class AuthController {
 
         AppUser user = appUserRepository.findByEmailAddress(email).orElse(null);
         if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
         }
         if (!"AMBASSADOR".equals(user.getRole())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an ambassador account");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Not an ambassador account"));
         }
         if (!"active".equals(user.getUserStatus())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account is inactive");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Account is inactive"));
         }
 
         String ambassadorIdStr = user.getAmbassadorId() == null ? null : user.getAmbassadorId().toString();
@@ -69,14 +75,23 @@ public class AuthController {
         user.setLastLoginAt(Instant.now());
         appUserRepository.save(user);
 
-        return ResponseEntity.ok(Map.of("token", token, "role", user.getRole(),
-                "ambassadorId", ambassadorIdStr == null ? "" : ambassadorIdStr));
+        String ambassadorCode = user.getAmbassadorId() != null
+                ? ambassadorRepository.findById(user.getAmbassadorId()).map(a -> a.getAmbassadorCode()).orElse(null)
+                : null;
+
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "role", user.getRole(),
+                "ambassadorId", ambassadorIdStr == null ? "" : ambassadorIdStr,
+                "name", user.getFullName() == null ? "Ambassador" : user.getFullName(),
+                "ambassadorCode", ambassadorCode == null ? "" : ambassadorCode
+        ));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.badRequest().body("No token provided");
+            return ResponseEntity.badRequest().body(Map.of("error", "No token provided"));
         }
         String token = authHeader.substring(7);
         try {
