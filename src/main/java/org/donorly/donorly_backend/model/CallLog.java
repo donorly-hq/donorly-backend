@@ -1,10 +1,16 @@
 package org.donorly.donorly_backend.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.Instant;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "call_logs")
 public class CallLog {
@@ -14,12 +20,8 @@ public class CallLog {
     private String id;
 
     private String donorId;
-
     private String ambassadorId;
-
     private String notes;
-
-    private String outcome; // e.g. Answered, No Answer, Callback
-
+    private String outcome;
     private Instant calledAt = Instant.now();
 }
