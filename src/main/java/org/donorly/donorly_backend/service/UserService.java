@@ -84,6 +84,13 @@ public class UserService {
         return appUserRepository.save(updated);
     }
 
+    public void resetPassword(UUID id, String newPlainPassword) {
+        AppUser user = appUserRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setPasswordHash(passwordEncoder.encode(newPlainPassword));
+        appUserRepository.save(user);
+    }
+
     public void delete(UUID id) {
         appUserRepository.deleteById(id);
     }

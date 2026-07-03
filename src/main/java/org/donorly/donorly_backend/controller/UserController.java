@@ -44,6 +44,12 @@ public class UserController {
         return userService.update(id, user);
     }
 
+    @PutMapping("/{id}/reset-password")
+    public ResponseEntity<String> resetPassword(@PathVariable UUID id, @RequestParam String newPassword) {
+        userService.resetPassword(id, newPassword);
+        return ResponseEntity.ok("Password reset");
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         userService.delete(id);
