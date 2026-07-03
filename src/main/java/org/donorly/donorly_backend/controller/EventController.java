@@ -1,50 +1,51 @@
 package org.donorly.donorly_backend.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.donorly.donorly_backend.model.Event;
 import org.donorly.donorly_backend.service.EventService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/events")
-@CrossOrigin(origins = "*")
+@RequiredArgsConstructor
 public class EventController {
 
-    @Autowired
-    private EventService eventService;
+    private final EventService eventService;
 
     @GetMapping
     public List<Event> getAll() {
-        return eventService.getAllEvents();
+        return eventService.getAll();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Event> getById(@PathVariable String id) {
-        return eventService.getEventById(id)
+        return eventService.getById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/status/{status}")
-    public List<Event> getByStatus(@PathVariable String status) {
-        return eventService.getEventsByStatus(status);
+    @GetMapping("/ambassador/{ambassadorId}")
+    public List<Event> getByAmbassador(@PathVariable String ambassadorId) {
+        return eventService.getByAmbassadorId(ambassadorId);
     }
 
     @PostMapping
     public Event create(@RequestBody Event event) {
-        return eventService.createEvent(event);
+        return eventService.save(event);
     }
 
     @PutMapping("/{id}")
     public Event update(@PathVariable String id, @RequestBody Event event) {
-        return eventService.updateEvent(id, event);
+        event.setId(id);
+        return eventService.save(event);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
-        eventService.deleteEvent(id);
-        return ResponseEntity.ok().build();
+        eventService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }
