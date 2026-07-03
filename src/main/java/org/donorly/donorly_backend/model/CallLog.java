@@ -1,20 +1,25 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
-@Document(collection = "call_logs")
+@Entity
+@Table(name = "call_logs")
 public class CallLog {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String pledgeCardId;
+
     private String donorId;
-    private String callerId;
-    private String outcome;
+
+    private String ambassadorId;
+
     private String notes;
-    private Integer attemptCount;
-    private LocalDateTime calledAt;
+
+    private String outcome; // e.g. Answered, No Answer, Callback
+
+    private Instant calledAt = Instant.now();
 }
