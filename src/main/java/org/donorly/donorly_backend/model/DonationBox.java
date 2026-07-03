@@ -1,19 +1,27 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
-@Document(collection = "donation_boxes")
+@Entity
+@Table(name = "donation_boxes")
 public class DonationBox {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String boxNumber;
-    private String area;
-    private String volunteerId;
-    private Double amount;
-    private String status;
-    private LocalDateTime createdAt;
+
+    private String location;
+
+    private String assignedAmbassadorId;
+
+    private Double totalCollected = 0.0;
+
+    private String status = "Active";
+
+    private Instant lastCollectedAt;
+
+    private Instant createdAt = Instant.now();
 }
