@@ -1,10 +1,16 @@
 package org.donorly.donorly_backend.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.Instant;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
@@ -20,7 +26,7 @@ public class User {
     private String password;
 
     @Column(nullable = false)
-    private String role; // ADMIN or AMBASSADOR
+    private String role;
 
     private boolean active = true;
 
