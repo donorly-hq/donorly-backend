@@ -4,6 +4,13 @@ substitutions:
   _SERVICE: donorly-backend
 
 steps:
+  # Authenticate Docker with Artifact Registry
+  - name: gcr.io/cloud-builders/gcloud
+    args:
+      - auth
+      - configure-docker
+      - us-central1-docker.pkg.dev
+
   # Build the Docker image
   - name: gcr.io/cloud-builders/docker
     args:
@@ -51,4 +58,4 @@ images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
 
 options:
-  logging: CLOUD_LOGGING_ONLY
+  logging: LEGACY
