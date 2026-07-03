@@ -1,11 +1,9 @@
 package org.donorly.donorly_backend.repository;
 
 import org.donorly.donorly_backend.model.Event;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
-public interface EventRepository extends MongoRepository<Event, String> {
-    List<Event> findByStatus(String status);
-    List<Event> findByType(String type);
-    List<Event> findByHostAmbassadorId(String hostAmbassadorId);
+public interface EventRepository extends JpaRepository<Event, String> {
+    List<Event> findByAmbassadorId(String ambassadorId);
 }
