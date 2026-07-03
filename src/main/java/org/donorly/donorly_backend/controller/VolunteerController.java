@@ -1,50 +1,51 @@
 package org.donorly.donorly_backend.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.donorly.donorly_backend.model.Volunteer;
 import org.donorly.donorly_backend.service.VolunteerService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/volunteers")
-@CrossOrigin(origins = "*")
+@RequiredArgsConstructor
 public class VolunteerController {
 
-    @Autowired
-    private VolunteerService volunteerService;
+    private final VolunteerService volunteerService;
 
     @GetMapping
     public List<Volunteer> getAll() {
-        return volunteerService.getAllVolunteers();
+        return volunteerService.getAll();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Volunteer> getById(@PathVariable String id) {
-        return volunteerService.getVolunteerById(id)
+        return volunteerService.getById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/role/{role}")
-    public List<Volunteer> getByRole(@PathVariable String role) {
-        return volunteerService.getVolunteersByRole(role);
+    @GetMapping("/ambassador/{ambassadorId}")
+    public List<Volunteer> getByAmbassador(@PathVariable String ambassadorId) {
+        return volunteerService.getByAmbassadorId(ambassadorId);
     }
 
     @PostMapping
     public Volunteer create(@RequestBody Volunteer volunteer) {
-        return volunteerService.createVolunteer(volunteer);
+        return volunteerService.save(volunteer);
     }
 
     @PutMapping("/{id}")
     public Volunteer update(@PathVariable String id, @RequestBody Volunteer volunteer) {
-        return volunteerService.updateVolunteer(id, volunteer);
+        volunteer.setId(id);
+        return volunteerService.save(volunteer);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
-        volunteerService.deleteVolunteer(id);
-        return ResponseEntity.ok().build();
+        volunteerService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }
