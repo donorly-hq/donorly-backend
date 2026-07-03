@@ -1,31 +1,48 @@
 package org.donorly.donorly_backend.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
-@Table(name = "events")
-public class Event {
+@Table(name = "townhalls")
+public class TownHall {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @Column(nullable = false)
-    private String name;
+    private String responsiblePersonName;
 
-    private String description;
+    private String responsiblePersonPhone;
+
+    private String venue;
+
+    private String address;
+
+    private String placeId;
+
+    private Double lat;
+
+    private Double lng;
 
     private LocalDate eventDate;
 
     private LocalTime eventTime;
 
-    private String location;
+    private Integer durationMinutes;
 
-    private String ambassadorId;
+    private Integer rsvpCount;
 
-    private String status = "Upcoming";
+    private String hostAmbassadorId;
+
+    private String status = "Scheduled";
 }
