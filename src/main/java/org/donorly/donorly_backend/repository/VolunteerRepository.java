@@ -1,11 +1,9 @@
 package org.donorly.donorly_backend.repository;
 
 import org.donorly.donorly_backend.model.Volunteer;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
-public interface VolunteerRepository extends MongoRepository<Volunteer, String> {
-    List<Volunteer> findByRole(String role);
-    List<Volunteer> findByStatus(String status);
-    List<Volunteer> findByRowArea(String rowArea);
+public interface VolunteerRepository extends JpaRepository<Volunteer, String> {
+    List<Volunteer> findByAmbassadorId(String ambassadorId);
 }
