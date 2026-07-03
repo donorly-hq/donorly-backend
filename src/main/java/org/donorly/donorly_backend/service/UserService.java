@@ -46,21 +46,37 @@ public class UserService {
      * version to the user as their welcome email. This is the method
      * to call when an admin adds a new ambassador in the UI.
      */
-    public AppUser createWithWelcomeEmail(AppUser user) {
+    public java.util.Map<String, Object> createWithWelcomeEmail(AppUser user) {
         String temporaryPassword = generateTemporaryPassword();
         user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         user.setUserStatus("active");
         AppUser saved = appUserRepository.save(user);
 
-        emailService.sendAmbassadorWelcomeEmail(
-                saved.getEmailAddress(),
-                saved.getFullName(),
-                saved.getEmailAddress(),
-                temporaryPassword,
-                PORTAL_URL
-        );
+        boolean emailSent = true;
+        try {
+            emailService.sendAmbassadorWelcomeEmail(
+                    saved.getEmailAddress(),
+                    saved.getFullName(),
+                    saved.getEmailAddress(),
+                    temporaryPassword,
+                    PORTAL_URL
+            );
+        } catch (Exception e) {
+            // Don't let an email failure block account creation — e.g.
+            // Resend's sandbox mode only delivers to the verified
+            // signup address until a domain is verified. Log and
+            // continue; the account still works for login. Returning
+            // the temp password below means the admin isn't locked
+            // out of knowing it even when the email doesn't arrive.
+            emailSent = false;
+            System.err.println("Welcome email failed to send for " + saved.getEmailAddress() + ": " + e.getMessage());
+        }
 
-        return saved;
+        return java.util.Map.of(
+                "user", saved,
+                "temporaryPassword", temporaryPassword,
+                "emailSent", emailSent
+        );
     }
 
     public AppUser update(UUID id, AppUser updated) {

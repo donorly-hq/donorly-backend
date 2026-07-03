@@ -31,9 +31,11 @@ public class UserController {
         return userService.getByEmail(email).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
-    // Creates the account AND sends the welcome email with credentials.
+    // Creates the account AND attempts the welcome email. Returns the
+    // temp password directly too, so you have it even if the email
+    // doesn't arrive (e.g. Resend sandbox mode restrictions).
     @PostMapping
-    public AppUser create(@RequestBody AppUser user) {
+    public java.util.Map<String, Object> create(@RequestBody AppUser user) {
         return userService.createWithWelcomeEmail(user);
     }
 
