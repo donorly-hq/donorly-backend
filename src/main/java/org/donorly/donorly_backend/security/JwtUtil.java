@@ -1,57 +1,60 @@
 package org.donorly.donorly_backend.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 
 @Component
 public class JwtUtil {
 
-    // Set JWT_SECRET as an env var (Railway + local). Must be 32+ characters.
-    @Value("${jwt.secret}")
-    private String secret;
+    private final SecretKey key;
+    private final long EXPIRY_MS = 1000 * 60 * 60 * 24; // 24 hours
 
-    @Value("${jwt.expiration-ms:86400000}") // default 24h
-    private long expirationMs;
-
-    private SecretKey key() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
+    public JwtUtil(@Value("${jwt.secret}") String secret) {
+        byte[] keyBytes = Base64.getDecoder().decode(secret);
+        this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(String userId, String role, String ambassadorId) {
         String jti = UUID.randomUUID().toString();
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + expirationMs);
-
-        var builder = Jwts.builder()
-                .id(jti)
+        return Jwts.builder()
                 .subject(userId)
                 .claim("role", role)
-                .issuedAt(now)
-                .expiration(expiry)
-                .signWith(key());
-
-        if (ambassadorId != null) {
-            builder.claim("ambassadorId", ambassadorId);
-        }
-        return builder.compact();
+                .claim("ambassadorId", ambassadorId)
+                .id(jti)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + EXPIRY_MS))
+                .signWith(key)
+                .compact();
     }
 
-    public Claims parseClaims(String token) {
+    public Claims parseToken(String token) {
         return Jwts.parser()
-                .verifyWith(key())
+                .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    public String getJti(String token) {
-        return parseClaims(token).getId();
+    public String extractUserId(String token) {
+        return parseToken(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        return parseToken(token).get("role", String.class);
+    }
+
+    public String extractJti(String token) {
+        return parseToken(token).getId();
+    }
+
+    public String extractAmbassadorId(String token) {
+        return parseToken(token).get("ambassadorId", String.class);
     }
 }
