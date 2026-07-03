@@ -14,7 +14,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
 import java.util.List;
 
 @Configuration
@@ -34,7 +33,8 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/auth/admin/login",
                     "/api/auth/ambassador/login",
-                    "/api/auth/logout"
+                    "/api/auth/logout",
+                    "/api/setup/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )
@@ -62,7 +62,6 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
