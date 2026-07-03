@@ -1,30 +1,47 @@
 package org.donorly.donorly_backend.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.Instant;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
-@Table(name = "pledge_cards")
-public class PledgeCard {
+@Table(name = "donors")
+public class Donor {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     @Column(nullable = false)
-    private String donorId;
+    private String name;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    private String phone;
+
+    private String city;
+
+    private String status = "Active";
 
     private String ambassadorId;
 
-    private Double amount = 0.0;
+    private Double pledgeAmount = 0.0;
+
+    private Double totalCommitment = 0.0;
 
     private String paymentMethod;
 
-    private String status = "Pledged"; // Pledged or Collected
+    private String message;
 
-    private String notes;
+    private Boolean collected = false;
 
     private Instant createdAt = Instant.now();
 }
