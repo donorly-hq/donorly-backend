@@ -1,11 +1,10 @@
 package org.donorly.donorly_backend.repository;
 
 import org.donorly.donorly_backend.model.CallLog;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
-public interface CallLogRepository extends MongoRepository<CallLog, String> {
+public interface CallLogRepository extends JpaRepository<CallLog, String> {
     List<CallLog> findByDonorId(String donorId);
-    List<CallLog> findByPledgeCardId(String pledgeCardId);
-    List<CallLog> findByCallerId(String callerId);
+    List<CallLog> findByAmbassadorId(String ambassadorId);
 }
