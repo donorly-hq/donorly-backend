@@ -1,24 +1,32 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
-@Document(collection = "users")
+@Entity
+@Table(name = "users")
 public class User {
-    @Id
-    private String id;
-    private String name;
-    private String email;
-    private String password; // BCrypt hash — never store plaintext
-    private String role; // "ADMIN" or "AMBASSADOR"
-    private String ambassadorId;
-    private Boolean active;
-    private LocalDateTime createdAt;
 
-    // --- Single-session login enforcement (Ambassador accounts) ---
-    private String activeSessionToken; // jti of the currently valid JWT, null when logged out
-    private LocalDateTime lastLoginAt;
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false)
+    private String role; // ADMIN or AMBASSADOR
+
+    private boolean active = true;
+
+    private String ambassadorId;
+
+    private String activeSessionToken;
+
+    private Instant lastLoginAt;
 }
