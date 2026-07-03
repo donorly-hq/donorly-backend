@@ -1,35 +1,36 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
-@Document(collection = "ambassadors")
+@Entity
+@Table(name = "ambassadors")
 public class Ambassador {
-    @Id
-    private String id;
-    private String name;
-    private String email;
-    private String phone;
-    private String city;
-    private String code;
-    private Double pledgeGoal;
-    private Double totalPledged;
-    private String status;
-    private LocalDateTime createdAt;
 
-    // --- Ambassador hierarchy ---
-    // The ambassador who created this one. Null for root-level ambassadors
-    // (root-level ambassadors can currently only be created by Admin).
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @Column(nullable = false)
+    private String name;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    private String phone;
+
+    private String city;
+
+    private String status = "Active";
+
+    private Double totalPledged = 0.0;
+
     private String parentAmbassadorId;
 
-    // Full chain of ancestor IDs, root-first, NOT including this ambassador's own id.
-    // e.g. if A created B and B created C, then C.ancestorPath = [A.id, B.id]
-    // Lets "find all descendants of X" be a single indexed query
-    // (ancestorPath contains X) instead of a recursive walk.
-    private List<String> ancestorPath = new ArrayList<>();
+    @ElementCollection
+    @CollectionTable(name = "ambassador_ancestor_path", joinColumns = @JoinColumn(name = "ambassador_id"))
+    @Column(name = "ancestor_id")
+    private List<String> ancestorPath;
 }
