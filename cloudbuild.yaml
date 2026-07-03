@@ -40,7 +40,7 @@ steps:
       - --set-env-vars=SPRING_PROFILES_ACTIVE=gcp
       - --set-secrets=JWT_SECRET=donorly-jwt-secret:latest,PGPASSWORD=donorly-db-password:latest,MAIL_PASSWORD=donorly-mail-password:latest
       - --set-env-vars=PGHOST=hayabusa.proxy.rlwy.net,PGPORT=29331,PGDATABASE=railway,PGUSER=postgres
-      - --set-env-vars=MAIL_USERNAME=sam@donorly.com,MAIL_FROM_NAME=Donorly
+      - --set-env-vars=MAIL_USERNAME=sam@donorly.com,MAIL_FROM_NAME=Donorly,APP_BASE_URL=https://donorly-portal-REPLACE_WITH_HASH-uc.a.run.app
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
