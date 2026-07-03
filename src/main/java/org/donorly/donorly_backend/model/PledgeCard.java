@@ -1,30 +1,30 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
-@Document(collection = "pledge_cards")
+@Entity
+@Table(name = "pledge_cards")
 public class PledgeCard {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
+
+    @Column(nullable = false)
     private String donorId;
+
     private String ambassadorId;
-    private String volunteerId;
-    private Double amount;
-    private String donationType;
-    private String recurringType;
-    private Integer duration;
+
+    private Double amount = 0.0;
+
     private String paymentMethod;
-    private String cardNumber;
-    private String cardExpiry;
-    private String bankRouting;
-    private String bankAccount;
-    private String rowArea;
-    private Boolean corporateMatch;
+
+    private String status = "Pledged"; // Pledged or Collected
+
     private String notes;
-    private String status;
-    private LocalDateTime createdAt;
+
+    private Instant createdAt = Instant.now();
 }
