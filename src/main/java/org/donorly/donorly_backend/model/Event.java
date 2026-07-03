@@ -1,22 +1,31 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Data
-@Document(collection = "events")
+@Entity
+@Table(name = "events")
 public class Event {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String title;
-    private String type;
-    private String venue;
-    private String hostAmbassadorId;
-    private Integer attendance;
-    private Double pledgeTarget;
-    private String status;
-    private LocalDateTime eventDate;
-    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private String name;
+
+    private String description;
+
+    private LocalDate eventDate;
+
+    private LocalTime eventTime;
+
+    private String location;
+
+    private String ambassadorId;
+
+    private String status = "Upcoming";
 }
