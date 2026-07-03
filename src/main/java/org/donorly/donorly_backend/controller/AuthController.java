@@ -1,8 +1,8 @@
 package org.donorly.donorly_backend.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.donorly.donorly_backend.model.User;
-import org.donorly.donorly_backend.repository.UserRepository;
+import org.donorly.donorly_backend.model.AppUser;
+import org.donorly.donorly_backend.repository.AppUserRepository;
 import org.donorly.donorly_backend.security.JwtUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,13 +11,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final UserRepository userRepository;
+    private final AppUserRepository appUserRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
@@ -26,20 +27,20 @@ public class AuthController {
         String email = body.get("email");
         String password = body.get("password");
 
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
+        AppUser user = appUserRepository.findByEmailAddress(email).orElse(null);
+        if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
         }
         if (!"ADMIN".equals(user.getRole())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an admin account");
         }
-        if (!user.isActive()) {
+        if (!"active".equals(user.getUserStatus())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account is inactive");
         }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getRole(), null);
+        String token = jwtUtil.generateToken(user.getUserId().toString(), user.getRole(), null);
         user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
+        appUserRepository.save(user);
 
         return ResponseEntity.ok(Map.of("token", token, "role", user.getRole()));
     }
@@ -49,29 +50,30 @@ public class AuthController {
         String email = body.get("email");
         String password = body.get("password");
 
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
+        AppUser user = appUserRepository.findByEmailAddress(email).orElse(null);
+        if (user == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
         }
         if (!"AMBASSADOR".equals(user.getRole())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an ambassador account");
         }
-        if (!user.isActive()) {
+        if (!"active".equals(user.getUserStatus())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account is inactive");
         }
         if (user.getActiveSessionToken() != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Already logged in elsewhere");
         }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getRole(), user.getAmbassadorId());
+        String ambassadorIdStr = user.getAmbassadorId() == null ? null : user.getAmbassadorId().toString();
+        String token = jwtUtil.generateToken(user.getUserId().toString(), user.getRole(), ambassadorIdStr);
         String jti = jwtUtil.extractJti(token);
 
         user.setActiveSessionToken(jti);
         user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
+        appUserRepository.save(user);
 
         return ResponseEntity.ok(Map.of("token", token, "role", user.getRole(),
-                "ambassadorId", user.getAmbassadorId()));
+                "ambassadorId", ambassadorIdStr == null ? "" : ambassadorIdStr));
     }
 
     @PostMapping("/logout")
@@ -81,10 +83,10 @@ public class AuthController {
         }
         String token = authHeader.substring(7);
         try {
-            String userId = jwtUtil.extractUserId(token);
-            userRepository.findById(userId).ifPresent(user -> {
+            UUID userId = UUID.fromString(jwtUtil.extractUserId(token));
+            appUserRepository.findById(userId).ifPresent(user -> {
                 user.setActiveSessionToken(null);
-                userRepository.save(user);
+                appUserRepository.save(user);
             });
         } catch (Exception ignored) {}
 

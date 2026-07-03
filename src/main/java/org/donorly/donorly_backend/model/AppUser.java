@@ -47,6 +47,13 @@ public class AppUser {
     @Column(name = "active_session_token")
     private String activeSessionToken;
 
+    // ADMIN or AMBASSADOR — denormalized for now, see V2 migration note
+    @Column(name = "role")
+    private String role;
+
+    @Column(name = "ambassador_id")
+    private UUID ambassadorId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -76,6 +83,10 @@ public class AppUser {
     public void setLastLoginAt(Instant lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public String getActiveSessionToken() { return activeSessionToken; }
     public void setActiveSessionToken(String activeSessionToken) { this.activeSessionToken = activeSessionToken; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    public UUID getAmbassadorId() { return ambassadorId; }
+    public void setAmbassadorId(UUID ambassadorId) { this.ambassadorId = ambassadorId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
