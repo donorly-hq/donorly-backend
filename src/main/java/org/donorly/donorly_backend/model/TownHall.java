@@ -1,33 +1,42 @@
 package org.donorly.donorly_backend.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
-@Document(collection = "townhalls")
+@Entity
+@Table(name = "townhalls")
 public class TownHall {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     private String responsiblePersonName;
+
     private String responsiblePersonPhone;
 
     private String venue;
-    private String address;     // human-readable, from Google Places Autocomplete
-    private String placeId;     // Google Places place_id
+
+    private String address;
+
+    private String placeId;
+
     private Double lat;
+
     private Double lng;
 
     private LocalDate eventDate;
-    private String eventTime;   // e.g. "18:30"
+
+    private LocalTime eventTime;
+
     private Integer durationMinutes;
+
     private Integer rsvpCount;
 
     private String hostAmbassadorId;
-    private String status; // planned / confirmed / completed / cancelled
 
-    private LocalDateTime createdAt;
+    private String status = "Scheduled";
 }
