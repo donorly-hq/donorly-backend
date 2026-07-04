@@ -11,6 +11,7 @@ public record OrganizationResponse(
         String status,
         String timezone,
         String logoUrl,
+        String logoData,
         String primaryColor,
         Instant createdAt,
         // owner summary — null when org was bootstrapped without an explicit owner

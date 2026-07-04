@@ -11,6 +11,8 @@ public record LoginResponse(
         UUID organizationId,
         String organizationName,
         String organizationPrimaryColor,
+        /** Resolved logo: uploaded image data (base64 data URL) preferred over logoUrl */
+        String organizationLogo,
         String roleCode,
         List<String> permissions
 ) {

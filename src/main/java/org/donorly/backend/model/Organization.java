@@ -32,6 +32,9 @@ public class Organization extends AuditableEntity {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    @Column(name = "logo_data", columnDefinition = "TEXT")
+    private String logoData;
+
     @Column(name = "primary_color")
     private String primaryColor;
 

@@ -22,6 +22,8 @@ public record OrganizationRequest(
 
         String logoUrl,
 
+        String logoData,
+
         String primaryColor,
 
         // ── Owner account (optional on create, ignored on update) ────────────

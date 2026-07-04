@@ -94,6 +94,7 @@ public class AuthService {
                 orgId,
                 org != null ? org.getName() : null,
                 org != null ? org.getPrimaryColor() : null,
+                org != null ? (org.getLogoData() != null ? org.getLogoData() : org.getLogoUrl()) : null,
                 role != null ? role.getCode() : (user.isPlatformAdmin() ? "platform_super_admin" : null),
                 permissions
         );

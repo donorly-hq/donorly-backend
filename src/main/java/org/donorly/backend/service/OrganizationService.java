@@ -67,6 +67,7 @@ public class OrganizationService {
         org.setVertical(request.vertical() != null ? request.vertical() : "nonprofit");
         org.setTimezone(request.timezone() != null ? request.timezone() : "America/Chicago");
         org.setLogoUrl(request.logoUrl());
+        org.setLogoData(request.logoData());
         org.setPrimaryColor(request.primaryColor());
         org.setStatus("trial");
         org = organizationRepository.save(org);
@@ -117,6 +118,7 @@ public class OrganizationService {
         if (request.vertical() != null) org.setVertical(request.vertical());
         if (request.timezone() != null) org.setTimezone(request.timezone());
         if (request.logoUrl() != null) org.setLogoUrl(request.logoUrl());
+        if (request.logoData() != null) org.setLogoData(request.logoData());
         if (request.primaryColor() != null) org.setPrimaryColor(request.primaryColor());
 
         return toResponse(organizationRepository.save(org), findOwner(id));
@@ -213,7 +215,7 @@ public class OrganizationService {
     private OrganizationResponse toResponse(Organization o, User owner) {
         return new OrganizationResponse(
                 o.getId(), o.getName(), o.getSlug(), o.getVertical(),
-                o.getStatus(), o.getTimezone(), o.getLogoUrl(),
+                o.getStatus(), o.getTimezone(), o.getLogoUrl(), o.getLogoData(),
                 o.getPrimaryColor(), o.getCreatedAt(),
                 owner != null ? owner.getId() : null,
                 owner != null ? owner.getFullName() : null,
