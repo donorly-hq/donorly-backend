@@ -2,6 +2,7 @@ package org.donorly.backend.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.donorly.backend.dto.OrgMemberSummary;
 import org.donorly.backend.dto.OrganizationRequest;
 import org.donorly.backend.dto.OrganizationResponse;
 import org.donorly.backend.dto.SetOwnerRequest;
@@ -58,6 +59,16 @@ public class OrganizationController {
     public OrganizationResponse setOwner(@PathVariable UUID id,
                                          @Valid @RequestBody SetOwnerRequest request) {
         return organizationService.setOwner(id, request);
+    }
+
+    @PutMapping("/{id}/owner/{userId}")
+    public OrganizationResponse promoteOwner(@PathVariable UUID id, @PathVariable UUID userId) {
+        return organizationService.promoteOwner(id, userId);
+    }
+
+    @GetMapping("/{id}/members")
+    public List<OrgMemberSummary> listMembers(@PathVariable UUID id) {
+        return organizationService.listMembers(id);
     }
 
     @DeleteMapping("/{id}")

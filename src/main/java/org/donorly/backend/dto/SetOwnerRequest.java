@@ -15,7 +15,7 @@ public record SetOwnerRequest(
         @Size(max = 200)
         String ownerEmail,
 
-        @NotBlank
+        /** Required only when creating a brand-new user account. */
         @Size(min = 8, message = "Password must be at least 8 characters")
         String ownerPassword
 ) {}

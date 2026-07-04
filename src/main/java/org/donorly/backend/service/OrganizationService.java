@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.common.ConflictException;
 import org.donorly.backend.common.NotFoundException;
+import org.donorly.backend.dto.OrgMemberSummary;
 import org.donorly.backend.dto.OrganizationRequest;
 import org.donorly.backend.dto.OrganizationResponse;
 import org.donorly.backend.dto.SetOwnerRequest;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -41,6 +44,29 @@ public class OrganizationService {
         return toResponse(org, findOwner(id));
     }
 
+    /** Active members of an org — for platform-admin owner transfer UI. */
+    public List<OrgMemberSummary> listMembers(UUID orgId) {
+        findActive(orgId);
+        return membershipRepository.findByOrganizationId(orgId).stream()
+                .filter(m -> "active".equals(m.getStatus()))
+                .map(m -> {
+                    User user = userRepository.findById(m.getUserId()).orElse(null);
+                    if (user == null) return null;
+                    Role role = roleRepository.findById(m.getRoleId()).orElse(null);
+                    return new OrgMemberSummary(
+                            user.getId(),
+                            user.getFullName(),
+                            user.getEmail(),
+                            role != null ? role.getCode() : null,
+                            role != null ? role.getName() : null,
+                            m.getStatus()
+                    );
+                })
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparing(OrgMemberSummary::fullName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
     @Transactional
     public OrganizationResponse create(OrganizationRequest request) {
         if (organizationRepository.findBySlug(request.slug()).isPresent()) {
@@ -52,15 +78,12 @@ public class OrganizationService {
             if (request.ownerName() == null || request.ownerName().isBlank()) {
                 throw new BadRequestException("Owner name is required when creating with an owner account");
             }
-            if (request.ownerPassword() == null || request.ownerPassword().isBlank()) {
-                throw new BadRequestException("Owner password is required when creating with an owner account");
-            }
-            if (userRepository.existsByEmailIgnoreCase(request.ownerEmail())) {
-                throw new ConflictException("A user with email '" + request.ownerEmail() + "' already exists");
+            if (!userRepository.existsByEmailIgnoreCase(request.ownerEmail())
+                    && (request.ownerPassword() == null || request.ownerPassword().isBlank())) {
+                throw new BadRequestException("Owner password is required when creating a new owner account");
             }
         }
 
-        // ── create org ────────────────────────────────────────────────────────
         Organization org = new Organization();
         org.setName(request.name());
         org.setSlug(request.slug());
@@ -72,33 +95,15 @@ public class OrganizationService {
         org.setStatus("trial");
         org = organizationRepository.save(org);
 
-        // ── org settings ──────────────────────────────────────────────────────
         if (!settingsRepository.existsById(org.getId())) {
             OrganizationSettings settings = new OrganizationSettings();
             settings.setOrganizationId(org.getId());
             settingsRepository.save(settings);
         }
 
-        // ── owner user + membership ───────────────────────────────────────────
         User owner = null;
         if (hasOwner) {
-            owner = new User();
-            owner.setFullName(request.ownerName());
-            owner.setEmail(request.ownerEmail().toLowerCase());
-            owner.setPasswordHash(passwordEncoder.encode(request.ownerPassword()));
-            owner.setStatus("active");
-            owner.setPlatformAdmin(false);
-            owner = userRepository.save(owner);
-
-            Role ownerRole = roleRepository.findByCode("organization_owner")
-                    .orElseThrow(() -> new IllegalStateException("organization_owner role not found — run DataSeeder first"));
-
-            OrganizationMembership membership = new OrganizationMembership();
-            membership.setOrganizationId(org.getId());
-            membership.setUserId(owner.getId());
-            membership.setRoleId(ownerRole.getId());
-            membership.setStatus("active");
-            membershipRepository.save(membership);
+            owner = assignOwnerUser(org.getId(), request.ownerEmail(), request.ownerName(), request.ownerPassword());
         }
 
         return toResponse(org, owner);
@@ -136,50 +141,45 @@ public class OrganizationService {
     }
 
     /**
-     * Creates (or replaces) the organization_owner account for an existing org.
-     * If an owner already exists their account is deactivated and a new one is created.
+     * Assigns organization ownership by email.
+     * Reuses an existing user when the email is already registered; otherwise creates a new account.
+     * Previous owners are demoted to Organization Admin (not disabled).
      */
     @Transactional
     public OrganizationResponse setOwner(UUID orgId, SetOwnerRequest request) {
         Organization org = findActive(orgId);
+        User owner = assignOwnerUser(orgId, request.ownerEmail(), request.ownerName(), request.ownerPassword());
+        return toResponse(org, owner);
+    }
 
-        if (userRepository.existsByEmailIgnoreCase(request.ownerEmail())) {
-            // user already exists — check if they are already the owner of this org
-            User existing = userRepository.findByEmailIgnoreCase(request.ownerEmail()).orElseThrow();
-            boolean alreadyMember = membershipRepository
-                    .findByOrganizationIdAndUserId(orgId, existing.getId()).isPresent();
-            if (!alreadyMember) {
-                throw new ConflictException("A user with email '" + request.ownerEmail() + "' already exists in the system");
-            }
+    /**
+     * Promotes an existing active member to organization owner.
+     * Previous owners are demoted to Organization Admin.
+     */
+    @Transactional
+    public OrganizationResponse promoteOwner(UUID orgId, UUID userId) {
+        Organization org = findActive(orgId);
+        Role ownerRole = requireRole("organization_owner");
+
+        OrganizationMembership membership = membershipRepository.findByOrganizationIdAndUserId(orgId, userId)
+                .orElseThrow(() -> new NotFoundException("This person is not a member of the organization"));
+
+        if (!"active".equals(membership.getStatus())) {
+            throw new BadRequestException("Only active members can be promoted to owner");
         }
 
-        // deactivate any existing organization_owner membership for this org
-        Role ownerRole = roleRepository.findByCode("organization_owner")
-                .orElseThrow(() -> new IllegalStateException("organization_owner role not found"));
-        membershipRepository.findByOrganizationId(orgId).stream()
-                .filter(m -> m.getRoleId().equals(ownerRole.getId()))
-                .forEach(m -> {
-                    m.setStatus("disabled");
-                    membershipRepository.save(m);
-                });
+        if (membership.getRoleId().equals(ownerRole.getId())) {
+            User alreadyOwner = userRepository.findById(userId).orElseThrow();
+            return toResponse(org, alreadyOwner);
+        }
 
-        // create new owner user
-        User owner = new User();
-        owner.setFullName(request.ownerName());
-        owner.setEmail(request.ownerEmail().toLowerCase());
-        owner.setPasswordHash(passwordEncoder.encode(request.ownerPassword()));
-        owner.setStatus("active");
-        owner.setPlatformAdmin(false);
-        owner = userRepository.save(owner);
-
-        // create membership
-        OrganizationMembership membership = new OrganizationMembership();
-        membership.setOrganizationId(orgId);
-        membership.setUserId(owner.getId());
+        demotePreviousOwners(orgId, userId);
         membership.setRoleId(ownerRole.getId());
         membership.setStatus("active");
         membershipRepository.save(membership);
 
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
         return toResponse(org, owner);
     }
 
@@ -188,6 +188,105 @@ public class OrganizationService {
         Organization org = findActive(id);
         org.setDeletedAt(Instant.now());
         organizationRepository.save(org);
+    }
+
+    // ── ownership helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Ensures {@code email} holds the organization_owner role for {@code orgId}.
+     * Creates the user when needed; links existing users without requiring a password.
+     */
+    private User assignOwnerUser(UUID orgId, String ownerEmail, String ownerName, String ownerPassword) {
+        String email = ownerEmail.trim().toLowerCase(Locale.ROOT);
+        Role ownerRole = requireRole("organization_owner");
+
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+
+        if (user != null) {
+            if (ownerName != null && !ownerName.isBlank()) {
+                user.setFullName(ownerName.trim());
+                userRepository.save(user);
+            }
+
+            OrganizationMembership membership = membershipRepository
+                    .findByOrganizationIdAndUserId(orgId, user.getId())
+                    .orElse(null);
+
+            if (membership != null && membership.getRoleId().equals(ownerRole.getId())
+                    && "active".equals(membership.getStatus())) {
+                return user;
+            }
+
+            demotePreviousOwners(orgId, user.getId());
+
+            if (membership != null) {
+                membership.setRoleId(ownerRole.getId());
+                membership.setStatus("active");
+                membershipRepository.save(membership);
+            } else {
+                OrganizationMembership created = new OrganizationMembership();
+                created.setOrganizationId(orgId);
+                created.setUserId(user.getId());
+                created.setRoleId(ownerRole.getId());
+                created.setStatus("active");
+                membershipRepository.save(created);
+            }
+            return user;
+        }
+
+        if (ownerName == null || ownerName.isBlank()) {
+            throw new BadRequestException("Owner name is required when creating a new owner account");
+        }
+        if (ownerPassword == null || ownerPassword.isBlank()) {
+            throw new BadRequestException("Password is required when creating a new owner account");
+        }
+
+        demotePreviousOwners(orgId, null);
+
+        User created = new User();
+        created.setFullName(ownerName.trim());
+        created.setEmail(email);
+        created.setPasswordHash(passwordEncoder.encode(ownerPassword));
+        created.setStatus("active");
+        created.setPlatformAdmin(false);
+        created = userRepository.save(created);
+
+        OrganizationMembership membership = new OrganizationMembership();
+        membership.setOrganizationId(orgId);
+        membership.setUserId(created.getId());
+        membership.setRoleId(ownerRole.getId());
+        membership.setStatus("active");
+        membershipRepository.save(membership);
+
+        return created;
+    }
+
+    /** Demotes every other organization_owner in this org to organization_admin. */
+    private void demotePreviousOwners(UUID orgId, UUID newOwnerUserId) {
+        Role ownerRole = requireRole("organization_owner");
+        Role adminRole = requireRole("organization_admin");
+
+        membershipRepository.findByOrganizationId(orgId).stream()
+                .filter(m -> m.getRoleId().equals(ownerRole.getId()))
+                .filter(m -> newOwnerUserId == null || !m.getUserId().equals(newOwnerUserId))
+                .forEach(m -> {
+                    m.setRoleId(adminRole.getId());
+                    m.setStatus("active");
+                    membershipRepository.save(m);
+                    invalidateSession(m.getUserId());
+                });
+    }
+
+    private void invalidateSession(UUID userId) {
+        userRepository.findById(userId).ifPresent(u -> {
+            u.setActiveSessionToken(null);
+            userRepository.save(u);
+        });
+    }
+
+    private Role requireRole(String code) {
+        return roleRepository.findByCode(code)
+                .orElseThrow(() -> new IllegalStateException(code + " role not found — run DataSeeder first"));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -201,7 +300,6 @@ public class OrganizationService {
         return org;
     }
 
-    /** Returns the organization_owner member's User, or null if none. */
     private User findOwner(UUID orgId) {
         return roleRepository.findByCode("organization_owner").map(role ->
                 membershipRepository.findByOrganizationId(orgId).stream()
