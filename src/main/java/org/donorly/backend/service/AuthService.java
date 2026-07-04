@@ -93,6 +93,7 @@ public class AuthService {
                 user.isPlatformAdmin(),
                 orgId,
                 org != null ? org.getName() : null,
+                org != null ? org.getPrimaryColor() : null,
                 role != null ? role.getCode() : (user.isPlatformAdmin() ? "platform_super_admin" : null),
                 permissions
         );

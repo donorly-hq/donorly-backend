@@ -10,6 +10,7 @@ public record LoginResponse(
         boolean platformAdmin,
         UUID organizationId,
         String organizationName,
+        String organizationPrimaryColor,
         String roleCode,
         List<String> permissions
 ) {
