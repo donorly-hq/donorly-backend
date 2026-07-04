@@ -11,9 +11,18 @@ public record LoginResponse(
         UUID organizationId,
         String organizationName,
         String organizationPrimaryColor,
-        /** Resolved logo: uploaded image data (base64 data URL) preferred over logoUrl */
+        /** Resolved logo URL path or absolute URL — never inline base64. */
         String organizationLogo,
         String roleCode,
-        List<String> permissions
+        List<String> permissions,
+        /** True when a one-time code was emailed and must be verified to finish login. */
+        boolean otpRequired,
+        /** Opaque id to pass back to /auth/verify-otp together with the emailed code. */
+        String challengeId
 ) {
+
+    public static LoginResponse otpChallenge(String challengeId) {
+        return new LoginResponse(null, null, null, false, null, null, null, null, null, null,
+                true, challengeId);
+    }
 }

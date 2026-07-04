@@ -7,6 +7,7 @@ import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.OrgMemberSummary;
 import org.donorly.backend.dto.OrganizationRequest;
 import org.donorly.backend.dto.OrganizationResponse;
+import org.donorly.backend.dto.OrganizationSummary;
 import org.donorly.backend.dto.SetOwnerRequest;
 import org.donorly.backend.model.*;
 import org.donorly.backend.repository.*;
@@ -29,13 +30,15 @@ public class OrganizationService {
     private final UserRepository userRepository;
     private final OrganizationMembershipRepository membershipRepository;
     private final RoleRepository roleRepository;
+    private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OrgLogoService orgLogoService;
 
-    public List<OrganizationResponse> listAll() {
+    public List<OrganizationSummary> listAll() {
         return organizationRepository.findAll()
                 .stream()
                 .filter(o -> o.getDeletedAt() == null)
-                .map(o -> toResponse(o, findOwner(o.getId())))
+                .map(o -> toSummary(o, findOwner(o.getId())))
                 .toList();
     }
 
@@ -90,10 +93,11 @@ public class OrganizationService {
         org.setVertical(request.vertical() != null ? request.vertical() : "nonprofit");
         org.setTimezone(request.timezone() != null ? request.timezone() : "America/Chicago");
         org.setLogoUrl(request.logoUrl());
-        org.setLogoData(request.logoData());
         org.setPrimaryColor(request.primaryColor());
         org.setStatus("trial");
         org = organizationRepository.save(org);
+
+        applyLogoUpload(org.getId(), request.logoData());
 
         if (!settingsRepository.existsById(org.getId())) {
             OrganizationSettings settings = new OrganizationSettings();
@@ -106,6 +110,7 @@ public class OrganizationService {
             owner = assignOwnerUser(org.getId(), request.ownerEmail(), request.ownerName(), request.ownerPassword());
         }
 
+        org = organizationRepository.findById(org.getId()).orElseThrow();
         return toResponse(org, owner);
     }
 
@@ -123,10 +128,18 @@ public class OrganizationService {
         if (request.vertical() != null) org.setVertical(request.vertical());
         if (request.timezone() != null) org.setTimezone(request.timezone());
         if (request.logoUrl() != null) org.setLogoUrl(request.logoUrl());
-        if (request.logoData() != null) org.setLogoData(request.logoData());
         if (request.primaryColor() != null) org.setPrimaryColor(request.primaryColor());
+        org = organizationRepository.save(org);
 
-        return toResponse(organizationRepository.save(org), findOwner(id));
+        applyLogoUpload(id, request.logoData());
+
+        return toResponse(organizationRepository.findById(id).orElseThrow(), findOwner(id));
+    }
+
+    private void applyLogoUpload(UUID orgId, String logoData) {
+        if (logoData != null && !logoData.isBlank()) {
+            orgLogoService.saveFromDataUrl(orgId, logoData);
+        }
     }
 
     @Transactional
@@ -278,10 +291,8 @@ public class OrganizationService {
     }
 
     private void invalidateSession(UUID userId) {
-        userRepository.findById(userId).ifPresent(u -> {
-            u.setActiveSessionToken(null);
-            userRepository.save(u);
-        });
+        // Role changed — force fresh logins so new permissions take effect
+        sessionRepository.deleteByUserId(userId);
     }
 
     private Role requireRole(String code) {
@@ -310,11 +321,22 @@ public class OrganizationService {
         ).orElse(null);
     }
 
+    private OrganizationSummary toSummary(Organization o, User owner) {
+        return new OrganizationSummary(
+                o.getId(), o.getName(), o.getSlug(), o.getVertical(),
+                o.getStatus(), o.getTimezone(), o.getPrimaryColor(),
+                orgLogoService.hasLogo(o), o.getCreatedAt(),
+                owner != null ? owner.getId() : null,
+                owner != null ? owner.getFullName() : null,
+                owner != null ? owner.getEmail() : null
+        );
+    }
+
     private OrganizationResponse toResponse(Organization o, User owner) {
         return new OrganizationResponse(
                 o.getId(), o.getName(), o.getSlug(), o.getVertical(),
-                o.getStatus(), o.getTimezone(), o.getLogoUrl(), o.getLogoData(),
-                o.getPrimaryColor(), o.getCreatedAt(),
+                o.getStatus(), o.getTimezone(), o.getLogoUrl(),
+                orgLogoService.hasLogo(o), o.getPrimaryColor(), o.getCreatedAt(),
                 owner != null ? owner.getId() : null,
                 owner != null ? owner.getFullName() : null,
                 owner != null ? owner.getEmail() : null

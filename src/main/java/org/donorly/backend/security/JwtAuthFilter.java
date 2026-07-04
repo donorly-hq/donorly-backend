@@ -9,9 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.donorly.backend.model.OrganizationMembership;
 import org.donorly.backend.model.Role;
 import org.donorly.backend.model.User;
+import org.donorly.backend.model.UserSession;
 import org.donorly.backend.repository.OrganizationMembershipRepository;
 import org.donorly.backend.repository.RoleRepository;
 import org.donorly.backend.repository.UserRepository;
+import org.donorly.backend.repository.UserSessionRepository;
 import org.donorly.backend.tenant.TenantContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -32,6 +34,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
     private final OrganizationMembershipRepository membershipRepository;
     private final RoleRepository roleRepository;
+    private final UserSessionRepository sessionRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -58,9 +61,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid account");
                 return;
             }
-            // Single active session enforcement
-            if (user.getActiveSessionToken() != null && !user.getActiveSessionToken().equals(jti)) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Session expired or logged in elsewhere");
+            // Session must exist and be unexpired (multiple concurrent sessions allowed)
+            UserSession session = jti != null ? sessionRepository.findById(jti).orElse(null) : null;
+            if (session == null || !session.getUserId().equals(userId)
+                    || session.getExpiresAt().isBefore(java.time.Instant.now())) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Session expired");
                 return;
             }
 
@@ -94,8 +99,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             TenantContext.setUserId(userId);
             TenantContext.setOrganizationId(organizationId);
 
+            // credentials carries the jti so logout can end just this session
             UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                    new UsernamePasswordAuthenticationToken(userId, jti, authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
 
             filterChain.doFilter(request, response);

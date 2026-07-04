@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.OrgMemberSummary;
 import org.donorly.backend.dto.OrganizationRequest;
 import org.donorly.backend.dto.OrganizationResponse;
+import org.donorly.backend.dto.OrganizationSummary;
 import org.donorly.backend.dto.SetOwnerRequest;
 import org.donorly.backend.service.OrganizationService;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class OrganizationController {
     private final OrganizationService organizationService;
 
     @GetMapping
-    public List<OrganizationResponse> list() {
+    public List<OrganizationSummary> list() {
         return organizationService.listAll();
     }
 

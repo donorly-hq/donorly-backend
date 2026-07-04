@@ -36,10 +36,6 @@ public class User extends AuditableEntity {
     @Column(name = "is_platform_admin", nullable = false)
     private boolean platformAdmin = false;
 
-    @JsonIgnore
-    @Column(name = "active_session_token")
-    private String activeSessionToken;
-
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 }
