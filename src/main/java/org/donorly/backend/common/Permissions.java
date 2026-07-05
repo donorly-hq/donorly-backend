@@ -46,6 +46,11 @@ public final class Permissions {
     public static final String TOWNHALLS_READ = "townhalls.read";
     public static final String TOWNHALLS_MANAGE = "townhalls.manage";
 
+    public static final String INVENTORY_READ = "inventory.read";
+    public static final String INVENTORY_WRITE = "inventory.write";
+    /** Check units in/out — accountability is restricted to owner/admin/campaign manager. */
+    public static final String INVENTORY_ASSIGN = "inventory.assign";
+
     public static final String COMMUNICATIONS_READ = "communications.read";
     public static final String COMMUNICATIONS_MANAGE = "communications.manage";
     public static final String COMMUNICATIONS_SEND = "communications.send";

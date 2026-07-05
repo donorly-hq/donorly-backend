@@ -73,7 +73,8 @@ public class DataSeeder implements CommandLineRunner {
                 Permissions.TOWNHALLS_READ, Permissions.TOWNHALLS_MANAGE,
                 Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_MANAGE, Permissions.COMMUNICATIONS_SEND,
                 Permissions.AI_USE, Permissions.AI_ADMIN,
-                Permissions.TEAM_INVITE
+                Permissions.TEAM_INVITE,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE, Permissions.INVENTORY_ASSIGN
         );
         for (String code : codes) {
             if (permissionRepository.findByCode(code).isEmpty()) {
@@ -101,7 +102,8 @@ public class DataSeeder implements CommandLineRunner {
                 Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE, Permissions.VOLUNTEERS_MANAGE,
                 Permissions.TOWNHALLS_READ, Permissions.TOWNHALLS_MANAGE,
                 Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_MANAGE, Permissions.COMMUNICATIONS_SEND,
-                Permissions.AI_USE, Permissions.AI_ADMIN));
+                Permissions.AI_USE, Permissions.AI_ADMIN,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE, Permissions.INVENTORY_ASSIGN));
         upsertRole("organization_owner", "Organization Owner", "organization", ownerPerms);
 
         Set<String> adminPerms = new HashSet<>(Arrays.asList(
@@ -116,7 +118,8 @@ public class DataSeeder implements CommandLineRunner {
                 Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE, Permissions.VOLUNTEERS_MANAGE,
                 Permissions.TOWNHALLS_READ, Permissions.TOWNHALLS_MANAGE,
                 Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_MANAGE, Permissions.COMMUNICATIONS_SEND,
-                Permissions.AI_USE));
+                Permissions.AI_USE,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE, Permissions.INVENTORY_ASSIGN));
         upsertRole("organization_admin", "Organization Admin", "organization", adminPerms);
 
         upsertRole("campaign_manager", "Campaign Manager", "organization", Set.of(
@@ -130,14 +133,16 @@ public class DataSeeder implements CommandLineRunner {
                 Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE, Permissions.VOLUNTEERS_MANAGE,
                 Permissions.TOWNHALLS_READ, Permissions.TOWNHALLS_MANAGE,
                 Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_MANAGE, Permissions.COMMUNICATIONS_SEND,
-                Permissions.TEAM_INVITE));
+                Permissions.TEAM_INVITE,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE, Permissions.INVENTORY_ASSIGN));
 
         upsertRole("finance_user", "Finance User", "organization", Set.of(
                 Permissions.DONORS_READ, Permissions.DONORS_READ_ALL,
                 Permissions.PLEDGES_READ, Permissions.PLEDGES_WRITE,
                 Permissions.PAYMENTS_MANAGE, Permissions.RECEIPTS_ISSUE, Permissions.REPORTS_VIEW,
                 Permissions.EVENTS_READ,
-                Permissions.COMMUNICATIONS_READ));
+                Permissions.COMMUNICATIONS_READ,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE));
 
         upsertRole("ambassador", "Ambassador", "organization", Set.of(
                 Permissions.DONORS_READ, Permissions.DONORS_READ_ALL, Permissions.DONORS_WRITE,
@@ -147,12 +152,14 @@ public class DataSeeder implements CommandLineRunner {
                 Permissions.EVENTS_READ,
                 Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE,
                 Permissions.TOWNHALLS_READ, Permissions.TOWNHALLS_MANAGE,
-                Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_SEND));
+                Permissions.COMMUNICATIONS_READ, Permissions.COMMUNICATIONS_SEND,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE));
 
         upsertRole("volunteer", "Volunteer", "organization", Set.of(
                 Permissions.DONORS_READ, Permissions.PLEDGES_WRITE,
                 Permissions.EVENTS_READ, Permissions.EVENTS_CHECKIN,
-                Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE));
+                Permissions.VOLUNTEERS_READ, Permissions.VOLUNTEERS_WRITE,
+                Permissions.INVENTORY_READ, Permissions.INVENTORY_WRITE));
 
         upsertRole("donor", "Donor", "organization", Collections.emptySet());
     }
