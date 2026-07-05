@@ -46,6 +46,7 @@ public class SecurityConfig {
                     "/api/auth/login",
                     "/api/auth/logout",
                     "/api/auth/verify-otp",
+                    "/api/auth/select-org",
                     "/api/auth/forgot-password",
                     "/api/auth/reset-password",
                     "/api/invitations/**",

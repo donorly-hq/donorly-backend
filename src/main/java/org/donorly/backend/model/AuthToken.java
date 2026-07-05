@@ -21,6 +21,7 @@ public class AuthToken {
 
     public static final String PURPOSE_PASSWORD_RESET = "password_reset";
     public static final String PURPOSE_LOGIN_OTP = "login_otp";
+    public static final String PURPOSE_ORG_SELECT = "org_select";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

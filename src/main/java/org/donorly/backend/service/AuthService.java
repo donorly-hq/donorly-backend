@@ -6,6 +6,7 @@ import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.dto.LoginRequest;
 import org.donorly.backend.dto.LoginResponse;
 import org.donorly.backend.dto.MeResponse;
+import org.donorly.backend.dto.OrgChoice;
 import org.donorly.backend.model.AuthToken;
 import org.donorly.backend.model.Organization;
 import org.donorly.backend.model.OrganizationMembership;
@@ -79,14 +80,78 @@ public class AuthService {
         }
         rateLimiter.reset(limiterKey);
 
-        ResolvedContext ctx = resolveContext(user, request.organizationSlug());
-
         // Platform admins carry the keys to every org — require an emailed one-time code.
         if (user.isPlatformAdmin()) {
             return startOtpChallenge(user, request.organizationSlug());
         }
 
+        // Multi-org members (ambassadors, campaign managers, volunteers, …) pick
+        // an organization when no slug narrowed it down.
+        String slug = request.organizationSlug();
+        if (slug == null || slug.isBlank()) {
+            List<OrganizationMembership> active = activeMemberships(user.getId());
+            if (active.size() > 1) {
+                return startOrgSelection(user, active);
+            }
+        }
+
+        return completeLogin(user, resolveContext(user, slug));
+    }
+
+    /** Finishes a multi-org login: the user picked one of their organizations. */
+    @Transactional
+    public LoginResponse selectOrganization(String challengeId, UUID organizationId) {
+        AuthToken challenge = authTokenRepository
+                .findByTokenAndPurpose(challengeId, AuthToken.PURPOSE_ORG_SELECT)
+                .orElseThrow(() -> new BadRequestException("Sign-in expired. Please sign in again."));
+
+        if (challenge.getUsedAt() != null || challenge.getExpiresAt().isBefore(Instant.now())) {
+            throw new BadRequestException("Sign-in expired. Please sign in again.");
+        }
+
+        User user = userRepository.findById(challenge.getUserId())
+                .orElseThrow(() -> new BadRequestException("Invalid account"));
+        if (!"active".equals(user.getStatus())) {
+            throw new BadRequestException("Account is not active");
+        }
+
+        ResolvedContext ctx = contextForMembership(user, organizationId);
+
+        challenge.setUsedAt(Instant.now());
+        authTokenRepository.save(challenge);
+
         return completeLogin(user, ctx);
+    }
+
+    /** Moves an authenticated session to another org the user belongs to (new token). */
+    @Transactional
+    public LoginResponse switchOrganization(UUID userId, String currentJti, UUID organizationId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("Invalid account"));
+        if (!"active".equals(user.getStatus())) {
+            throw new BadRequestException("Account is not active");
+        }
+
+        ResolvedContext ctx;
+        if (user.isPlatformAdmin()) {
+            Organization org = organizationRepository.findById(organizationId)
+                    .orElseThrow(() -> new BadRequestException("Unknown organization"));
+            ctx = new ResolvedContext(org, null);
+        } else {
+            ctx = contextForMembership(user, organizationId);
+        }
+
+        // Retire the session being replaced; other devices are untouched.
+        if (currentJti != null) {
+            sessionRepository.deleteById(currentJti);
+        }
+        return completeLogin(user, ctx);
+    }
+
+    /** All organizations the user is an active member of — powers the org switcher. */
+    @Transactional(readOnly = true)
+    public List<OrgChoice> myOrganizations(UUID userId) {
+        return orgChoices(activeMemberships(userId));
     }
 
     @Transactional
@@ -229,6 +294,55 @@ public class AuthService {
 
     private record ResolvedContext(Organization org, Role role) {}
 
+    private List<OrganizationMembership> activeMemberships(UUID userId) {
+        return membershipRepository.findByUserId(userId).stream()
+                .filter(m -> "active".equals(m.getStatus()))
+                .toList();
+    }
+
+    /** Resolves an org the user actively belongs to, or fails. */
+    private ResolvedContext contextForMembership(User user, UUID organizationId) {
+        OrganizationMembership membership = membershipRepository
+                .findByOrganizationIdAndUserId(organizationId, user.getId())
+                .filter(m -> "active".equals(m.getStatus()))
+                .orElseThrow(() -> new BadRequestException("You are not a member of that organization"));
+        Organization org = organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new BadRequestException("Unknown organization"));
+        Role role = roleRepository.findById(membership.getRoleId()).orElse(null);
+        return new ResolvedContext(org, role);
+    }
+
+    private LoginResponse startOrgSelection(User user, List<OrganizationMembership> memberships) {
+        AuthToken challenge = new AuthToken();
+        challenge.setUserId(user.getId());
+        challenge.setToken(randomToken());
+        challenge.setPurpose(AuthToken.PURPOSE_ORG_SELECT);
+        challenge.setExpiresAt(Instant.now().plus(OTP_TTL));
+        authTokenRepository.save(challenge);
+
+        return LoginResponse.orgSelection(challenge.getToken(), orgChoices(memberships));
+    }
+
+    private List<OrgChoice> orgChoices(List<OrganizationMembership> memberships) {
+        return memberships.stream()
+                .map(m -> {
+                    Organization org = organizationRepository.findById(m.getOrganizationId()).orElse(null);
+                    if (org == null) return null;
+                    Role role = roleRepository.findById(m.getRoleId()).orElse(null);
+                    return new OrgChoice(
+                            org.getId(),
+                            org.getName(),
+                            org.getSlug(),
+                            orgLogoService.resolveLogoUrl(org),
+                            org.getPrimaryColor(),
+                            role != null ? role.getCode() : null,
+                            role != null ? role.getName() : null);
+                })
+                .filter(c -> c != null)
+                .sorted((a, b) -> a.name().compareToIgnoreCase(b.name()))
+                .toList();
+    }
+
     private ResolvedContext resolveContext(User user, String organizationSlug) {
         Organization org = null;
         OrganizationMembership membership = null;
@@ -310,6 +424,8 @@ public class AuthService {
                 info.organizationLogo(),
                 info.roleCode(),
                 info.permissions(),
+                false,
+                null,
                 false,
                 null
         );

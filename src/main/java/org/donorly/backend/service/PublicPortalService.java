@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.PublicCheckinInfo;
+import org.donorly.backend.dto.PublicSelfPledgeRequest;
+import org.donorly.backend.dto.PublicSelfPledgeResponse;
 import org.donorly.backend.dto.PublicThermometerResponse;
 import org.donorly.backend.model.AuditLog;
 import org.donorly.backend.model.Campaign;
@@ -19,6 +21,7 @@ import org.donorly.backend.repository.EventRegistrationRepository;
 import org.donorly.backend.repository.EventRepository;
 import org.donorly.backend.repository.OrganizationRepository;
 import org.donorly.backend.repository.PledgeRepository;
+import org.donorly.backend.security.LoginRateLimiter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +46,9 @@ public class PublicPortalService {
     private final EventRepository eventRepository;
     private final EventRegistrationRepository registrationRepository;
     private final AuditLogRepository auditLogRepository;
+    private final LoginRateLimiter rateLimiter;
+
+    private static final BigDecimal SELF_PLEDGE_MAX = new BigDecimal("100000");
 
     /** Keyed by campaign UUID — an unguessable capability URL, no login needed. */
     public PublicThermometerResponse thermometer(UUID campaignId) {
@@ -73,6 +79,95 @@ public class PublicPortalService {
                 pledged != null ? pledged : BigDecimal.ZERO,
                 collected != null ? collected : BigDecimal.ZERO,
                 count, recentDtos);
+    }
+
+    /**
+     * Unauthenticated pledge from a donor's own phone (Event Mode QR).
+     * Guards: campaign must be active, amount is capped, and submissions are
+     * rate-limited per client IP. The key is bucketed per minute so a venue
+     * NAT (one IP for the whole room) still gets 5 pledges/minute rather
+     * than 5 per quarter hour. Pledges land as source="self" for staff review.
+     */
+    @Transactional
+    public PublicSelfPledgeResponse selfPledge(UUID campaignId, PublicSelfPledgeRequest request, String clientIp) {
+        String limiterKey = "selfpledge:" + clientIp + ":" + (Instant.now().getEpochSecond() / 60);
+        if (rateLimiter.isBlocked(limiterKey)) {
+            throw new BadRequestException("Too many pledges from this connection — please try again in a minute.");
+        }
+        rateLimiter.recordFailure(limiterKey);
+
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new NotFoundException("Campaign not found"));
+        if (!"active".equals(campaign.getStatus())) {
+            throw new BadRequestException("This campaign is not accepting pledges right now");
+        }
+        Organization org = organizationRepository.findById(campaign.getOrganizationId())
+                .orElseThrow(() -> new NotFoundException("Organization not found"));
+
+        if (request.amount().compareTo(SELF_PLEDGE_MAX) > 0) {
+            throw new BadRequestException("For pledges this large, please speak with a volunteer");
+        }
+
+        String name = request.fullName().trim();
+        String email = blankToNull(request.email());
+        String phone = blankToNull(request.phone());
+
+        Donor donor = findExistingDonor(org.getId(), name, email, phone);
+        if (donor == null) {
+            donor = new Donor();
+            donor.setOrganizationId(org.getId());
+            donor.setFullName(name);
+            donor.setEmail(email);
+            donor.setPhone(phone);
+            donor = donorRepository.save(donor);
+        }
+
+        Pledge pledge = new Pledge();
+        pledge.setOrganizationId(org.getId());
+        pledge.setCampaignId(campaign.getId());
+        pledge.setDonorId(donor.getId());
+        pledge.setAmount(request.amount());
+        pledge.setStartDate(java.time.LocalDate.now());
+        pledge.setSource("self");
+        pledge.setStatus("pending");
+        Pledge saved = pledgeRepository.save(pledge);
+
+        AuditLog log = new AuditLog();
+        log.setOrganizationId(org.getId());
+        log.setAction("pledge.self_create");
+        log.setEntityType("pledge");
+        log.setEntityId(saved.getId());
+        auditLogRepository.save(log);
+
+        return new PublicSelfPledgeResponse(
+                donor.getFullName(), saved.getAmount(), campaign.getName(), org.getName());
+    }
+
+    /** Same matching rules as staff quick-entry: email first, then normalized name+phone. */
+    private Donor findExistingDonor(UUID orgId, String name, String email, String phone) {
+        var candidates = donorRepository.findByOrganizationIdAndDeletedAtIsNull(orgId);
+        if (email != null) {
+            for (Donor d : candidates) {
+                if (d.getEmail() != null && d.getEmail().equalsIgnoreCase(email)) {
+                    return d;
+                }
+            }
+        }
+        String nameKey = DonorImportService.normalizeName(name);
+        String phoneKey = DonorImportService.normalizePhone(phone);
+        for (Donor d : candidates) {
+            if (DonorImportService.normalizeName(d.getFullName()).equals(nameKey)
+                    && DonorImportService.normalizePhone(d.getPhone()).equals(phoneKey)) {
+                return d;
+            }
+        }
+        return null;
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public PublicCheckinInfo checkinInfo(UUID eventId, String code) {
