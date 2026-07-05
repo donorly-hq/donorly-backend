@@ -50,6 +50,7 @@ public class SecurityConfig {
                     "/api/auth/reset-password",
                     "/api/invitations/**",
                     "/api/organizations/*/logo",
+                    "/api/public/**",
                     "/actuator/health"
                 ).permitAll()
                 .anyRequest().authenticated()
