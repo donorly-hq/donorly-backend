@@ -31,6 +31,14 @@ public class PledgeService {
         return pledgeRepository.findByOrganizationId(TenantContext.requireOrganizationId());
     }
 
+    public org.donorly.backend.dto.PageResponse<Pledge> page(int page, int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(page, 0), DonorService.clampSize(size),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return org.donorly.backend.dto.PageResponse.from(
+                pledgeRepository.findByOrganizationId(TenantContext.requireOrganizationId(), pageable));
+    }
+
     public List<Pledge> listByCampaign(UUID campaignId) {
         return pledgeRepository.findByOrganizationIdAndCampaignId(TenantContext.requireOrganizationId(), campaignId);
     }

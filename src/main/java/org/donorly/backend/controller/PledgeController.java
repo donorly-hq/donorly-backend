@@ -20,10 +20,15 @@ public class PledgeController {
 
     private final PledgeService pledgeService;
 
+    /** Without {@code page}, returns the full list (legacy behavior); with it, a page envelope. */
     @GetMapping("/pledges")
     @PreAuthorize("hasAuthority('pledges.read')")
-    public List<Pledge> list() {
-        return pledgeService.list();
+    public Object list(@RequestParam(required = false) Integer page,
+                       @RequestParam(defaultValue = "50") int size) {
+        if (page == null) {
+            return pledgeService.list();
+        }
+        return pledgeService.page(page, size);
     }
 
     @GetMapping("/pledges/{id}")

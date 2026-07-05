@@ -21,10 +21,15 @@ public class CommunicationController {
 
     private final CommunicationService communicationService;
 
+    /** Without {@code page}, returns the full list (legacy behavior); with it, a page envelope. */
     @GetMapping("/messages")
     @PreAuthorize("hasAuthority('communications.read')")
-    public List<CommunicationMessageResponse> listMessages() {
-        return communicationService.listMessages();
+    public Object listMessages(@RequestParam(required = false) Integer page,
+                               @RequestParam(defaultValue = "50") int size) {
+        if (page == null) {
+            return communicationService.listMessages();
+        }
+        return communicationService.pageMessages(page, size);
     }
 
     @GetMapping("/messages/donor/{donorId}")

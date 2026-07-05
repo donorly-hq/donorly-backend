@@ -20,6 +20,7 @@ import java.util.*;
 @Component
 @Profile("!test")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class DataSeeder implements CommandLineRunner {
 
     private final PermissionRepository permissionRepository;
@@ -34,7 +35,9 @@ public class DataSeeder implements CommandLineRunner {
     private boolean bootstrapEnabled;
     @Value("${donorly.bootstrap.super-admin-email:admin@donorly.org}")
     private String superAdminEmail;
-    @Value("${donorly.bootstrap.super-admin-password:ChangeMe123!}")
+    // No default on purpose: shipping a known password would be a critical hole.
+    // When unset, a random one-time password is generated and logged once.
+    @Value("${donorly.bootstrap.super-admin-password:}")
     private String superAdminPassword;
     @Value("${donorly.bootstrap.default-org-name:Jamia Masjid Chicago}")
     private String defaultOrgName;
@@ -188,10 +191,17 @@ public class DataSeeder implements CommandLineRunner {
             settingsRepository.save(settings);
         }
 
+        String password = superAdminPassword;
+        if (password == null || password.isBlank()) {
+            password = generatePassword();
+            log.warn("DONORLY_SUPERADMIN_PASSWORD is not set — generated a one-time password for {}: {} "
+                    + "(sign in and change it immediately)", superAdminEmail, password);
+        }
+
         User admin = new User();
         admin.setEmail(superAdminEmail);
         admin.setFullName("Platform Super Admin");
-        admin.setPasswordHash(passwordEncoder.encode(superAdminPassword));
+        admin.setPasswordHash(passwordEncoder.encode(password));
         admin.setStatus("active");
         admin.setPlatformAdmin(true);
         admin = userRepository.save(admin);
@@ -205,6 +215,17 @@ public class DataSeeder implements CommandLineRunner {
             membership.setStatus("active");
             membershipRepository.save(membership);
         }
+    }
+
+    private static String generatePassword() {
+        // Unambiguous alphanumerics + symbols, 20 chars from SecureRandom
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(20);
+        for (int i = 0; i < 20; i++) {
+            sb.append(alphabet.charAt(random.nextInt(alphabet.length())));
+        }
+        return sb.toString();
     }
 
     /**

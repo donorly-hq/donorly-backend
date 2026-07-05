@@ -45,6 +45,15 @@ public class PaymentService {
                 .toList();
     }
 
+    public org.donorly.backend.dto.PageResponse<PaymentResponse> page(int page, int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(page, 0), DonorService.clampSize(size),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return org.donorly.backend.dto.PageResponse.from(
+                paymentRepository.findByOrganizationId(TenantContext.requireOrganizationId(), pageable))
+                .map(this::toResponse);
+    }
+
     public List<PaymentResponse> listByDonor(UUID donorId) {
         return paymentRepository
                 .findByOrganizationIdAndDonorIdOrderByCreatedAtDesc(

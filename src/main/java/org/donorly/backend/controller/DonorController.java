@@ -37,10 +37,20 @@ public class DonorController {
     private final DonorNoteService noteService;
     private final DonorTagService tagService;
 
+    /**
+     * Without {@code page}, returns the full list (legacy behavior, used by dropdowns).
+     * With {@code page}, returns a {@code PageResponse} envelope; {@code q} filters by
+     * name/email/phone/city.
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('donors.read')")
-    public List<Donor> list() {
-        return donorService.list();
+    public Object list(@RequestParam(required = false) Integer page,
+                       @RequestParam(defaultValue = "50") int size,
+                       @RequestParam(required = false) String q) {
+        if (page == null) {
+            return donorService.list();
+        }
+        return donorService.page(page, size, q);
     }
 
     @GetMapping("/mine")

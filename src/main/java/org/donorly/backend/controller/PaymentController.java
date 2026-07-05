@@ -20,10 +20,15 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
+    /** Without {@code page}, returns the full list (legacy behavior); with it, a page envelope. */
     @GetMapping
     @PreAuthorize("hasAuthority('payments.manage')")
-    public List<PaymentResponse> list() {
-        return paymentService.list();
+    public Object list(@RequestParam(required = false) Integer page,
+                       @RequestParam(defaultValue = "50") int size) {
+        if (page == null) {
+            return paymentService.list();
+        }
+        return paymentService.page(page, size);
     }
 
     @GetMapping("/{id}")

@@ -4,12 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.common.Permissions;
 import org.donorly.backend.dto.DonorRequest;
+import org.donorly.backend.dto.PageResponse;
 import org.donorly.backend.model.Donor;
 import org.donorly.backend.model.DonorAssignment;
 import org.donorly.backend.repository.DonorAssignmentRepository;
 import org.donorly.backend.repository.DonorRepository;
 import org.donorly.backend.security.SecurityUtils;
 import org.donorly.backend.tenant.TenantContext;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,30 @@ public class DonorService {
         return donors.stream()
                 .filter(d -> assignedDonorIds.contains(d.getId()))
                 .collect(Collectors.toList());
+    }
+
+    /** Paginated, optionally-searched donor list. Ambassadors only see assigned donors. */
+    public PageResponse<Donor> page(int page, int size, String search) {
+        UUID orgId = TenantContext.requireOrganizationId();
+        Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size),
+                Sort.by(Sort.Direction.ASC, "fullName"));
+        String q = toLikePattern(search);
+        if (canReadAllDonors()) {
+            return PageResponse.from(donorRepository.pageByOrganization(orgId, q, pageable));
+        }
+        Set<UUID> assignedDonorIds = assignedDonorIds(orgId);
+        if (assignedDonorIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        return PageResponse.from(donorRepository.pageByOrganizationAndIds(orgId, q, assignedDonorIds, pageable));
+    }
+
+    static int clampSize(int size) {
+        return Math.min(Math.max(size, 1), 200);
+    }
+
+    static String toLikePattern(String search) {
+        return (search == null || search.isBlank()) ? "%" : "%" + search.trim().toLowerCase() + "%";
     }
 
     public Donor get(UUID id) {

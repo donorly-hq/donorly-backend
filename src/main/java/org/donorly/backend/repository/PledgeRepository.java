@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public interface PledgeRepository extends JpaRepository<Pledge, UUID> {
     List<Pledge> findByOrganizationId(UUID organizationId);
+    org.springframework.data.domain.Page<Pledge> findByOrganizationId(
+            UUID organizationId, org.springframework.data.domain.Pageable pageable);
+    long countByOrganizationId(UUID organizationId);
     List<Pledge> findByOrganizationIdAndCampaignId(UUID organizationId, UUID campaignId);
     List<Pledge> findByOrganizationIdAndDonorId(UUID organizationId, UUID donorId);
     Optional<Pledge> findByIdAndOrganizationId(UUID id, UUID organizationId);

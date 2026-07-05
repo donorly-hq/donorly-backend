@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
+    org.springframework.data.domain.Page<Payment> findByOrganizationId(
+            UUID organizationId, org.springframework.data.domain.Pageable pageable);
     List<Payment> findByOrganizationIdAndDonorIdOrderByCreatedAtDesc(UUID organizationId, UUID donorId);
     List<Payment> findByOrganizationIdAndPledgeIdOrderByCreatedAtDesc(UUID organizationId, UUID pledgeId);
     Optional<Payment> findByIdAndOrganizationId(UUID id, UUID organizationId);

@@ -28,10 +28,17 @@ import java.util.UUID;
 public class OrganizationController {
 
     private final OrganizationService organizationService;
+    private final org.donorly.backend.service.PlatformMetricsService platformMetricsService;
 
     @GetMapping
     public List<OrganizationSummary> list() {
         return organizationService.listAll();
+    }
+
+    /** Usage snapshot per tenant: members, donors, campaigns, pledged/collected, last activity. */
+    @GetMapping("/metrics")
+    public List<org.donorly.backend.dto.OrgUsageMetrics> metrics() {
+        return platformMetricsService.listUsageMetrics();
     }
 
     @GetMapping("/{id}")

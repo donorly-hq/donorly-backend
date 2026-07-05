@@ -43,6 +43,15 @@ public class CommunicationService {
                 .toList();
     }
 
+    public org.donorly.backend.dto.PageResponse<CommunicationMessageResponse> pageMessages(int page, int size) {
+        UUID orgId = TenantContext.requireOrganizationId();
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(page, 0), DonorService.clampSize(size),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return org.donorly.backend.dto.PageResponse.from(messageRepository.findByOrganizationId(orgId, pageable))
+                .map(this::toResponse);
+    }
+
     public List<CommunicationMessageResponse> listMessagesForDonor(UUID donorId) {
         UUID orgId = TenantContext.requireOrganizationId();
         donorService.get(donorId);
