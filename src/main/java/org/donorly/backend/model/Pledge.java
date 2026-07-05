@@ -51,4 +51,7 @@ public class Pledge extends AuditableEntity {
     private String source;
 
     private String notes;
+
+    @Column(name = "last_reminder_at")
+    private java.time.Instant lastReminderAt;
 }

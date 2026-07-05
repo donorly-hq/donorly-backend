@@ -38,4 +38,17 @@ public interface PledgeRepository extends JpaRepository<Pledge, UUID> {
     BigDecimal sumCollectedByDonors(@Param("orgId") UUID orgId, @Param("donorIds") java.util.Collection<UUID> donorIds);
 
     long countByOrganizationIdAndDonorIdIn(UUID organizationId, java.util.Collection<UUID> donorIds);
+
+    /** Unfulfilled pledges (all orgs) that have not been reminded since {@code cutoff}. */
+    @Query("""
+            select p from Pledge p
+            where p.status in ('pending', 'active')
+              and p.collectedAmount < p.amount
+              and p.createdAt < :minAge
+              and (p.lastReminderAt is null or p.lastReminderAt < :cutoff)
+            """)
+    List<Pledge> findDueForReminder(@Param("minAge") java.time.Instant minAge,
+                                    @Param("cutoff") java.time.Instant cutoff);
+
+    List<Pledge> findTop10ByOrganizationIdAndCampaignIdOrderByCreatedAtDesc(UUID organizationId, UUID campaignId);
 }

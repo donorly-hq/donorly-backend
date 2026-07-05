@@ -19,6 +19,7 @@ import java.util.UUID;
 public class PledgeController {
 
     private final PledgeService pledgeService;
+    private final org.donorly.backend.service.PledgeReminderService reminderService;
 
     /** Without {@code page}, returns the full list (legacy behavior); with it, a page envelope. */
     @GetMapping("/pledges")
@@ -54,6 +55,29 @@ public class PledgeController {
     public ResponseEntity<Pledge> create(@PathVariable UUID campaignId,
                                          @Valid @RequestBody PledgeRequest request) {
         return ResponseEntity.ok(pledgeService.create(campaignId, request));
+    }
+
+    /** One-tap entry for live events: find-or-create donor + pledge in one call. */
+    @PostMapping("/pledges/quick")
+    @PreAuthorize("hasAuthority('pledges.write')")
+    public org.donorly.backend.dto.QuickPledgeResponse quick(
+            @Valid @RequestBody org.donorly.backend.dto.QuickPledgeRequest request) {
+        return pledgeService.quickCreate(request);
+    }
+
+    /** Projector-friendly live tally for a campaign. */
+    @GetMapping("/campaigns/{campaignId}/live")
+    @PreAuthorize("hasAuthority('pledges.read')")
+    public org.donorly.backend.dto.CampaignLiveResponse live(@PathVariable UUID campaignId) {
+        return pledgeService.liveProgress(campaignId);
+    }
+
+    /** Manual pledge reminder email, triggered from the UI. */
+    @PostMapping("/pledges/{id}/remind")
+    @PreAuthorize("hasAuthority('pledges.write')")
+    public ResponseEntity<?> remind(@PathVariable UUID id) {
+        reminderService.sendReminder(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/pledges/{id}")
