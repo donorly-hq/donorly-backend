@@ -26,6 +26,7 @@ public class ReportService {
     private final PledgeRepository pledgeRepository;
     private final FollowUpRepository followUpRepository;
     private final PaymentRepository paymentRepository;
+    private final org.donorly.backend.repository.ReceiptRepository receiptRepository;
 
     public FundraisingReportResponse fundraisingReport() {
         UUID orgId = TenantContext.requireOrganizationId();
@@ -66,6 +67,55 @@ public class ReportService {
                 monthPayments.size(),
                 collectedThisMonth
         );
+    }
+
+    /** One statement per donor covering all payments in {@code year}, for tax letters. */
+    public org.donorly.backend.dto.YearEndStatementResponse yearEndStatements(int year) {
+        UUID orgId = TenantContext.requireOrganizationId();
+
+        var yearPayments = paymentRepository.findByOrganizationIdOrderByCreatedAtDesc(orgId).stream()
+                .filter(p -> p.getPaymentDate() != null && p.getPaymentDate().getYear() == year)
+                .toList();
+
+        var receiptsByPayment = new java.util.HashMap<UUID, String>();
+        for (Payment p : yearPayments) {
+            receiptRepository.findByPaymentId(p.getId())
+                    .ifPresent(r -> receiptsByPayment.put(p.getId(), r.getReceiptNumber()));
+        }
+
+        var donors = donorRepository.findAllById(
+                yearPayments.stream().map(Payment::getDonorId).collect(java.util.stream.Collectors.toSet()));
+        var donorById = donors.stream()
+                .collect(java.util.stream.Collectors.toMap(org.donorly.backend.model.Donor::getId, d -> d));
+
+        var byDonor = yearPayments.stream()
+                .collect(java.util.stream.Collectors.groupingBy(Payment::getDonorId));
+
+        var statements = byDonor.entrySet().stream()
+                .map(entry -> {
+                    var donor = donorById.get(entry.getKey());
+                    var lines = entry.getValue().stream()
+                            .sorted(java.util.Comparator.comparing(Payment::getPaymentDate))
+                            .map(p -> new org.donorly.backend.dto.YearEndStatementResponse.PaymentLine(
+                                    p.getPaymentDate(), p.getAmount(), p.getPaymentMethod(),
+                                    receiptsByPayment.get(p.getId())))
+                            .toList();
+                    BigDecimal total = entry.getValue().stream()
+                            .map(Payment::getAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return new org.donorly.backend.dto.YearEndStatementResponse.DonorStatement(
+                            entry.getKey(),
+                            donor != null ? donor.getFullName() : "Unknown donor",
+                            donor != null ? donor.getEmail() : null,
+                            donor != null ? donor.getCity() : null,
+                            total, lines);
+                })
+                .sorted(java.util.Comparator.comparing(
+                        org.donorly.backend.dto.YearEndStatementResponse.DonorStatement::donorName,
+                        String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        return new org.donorly.backend.dto.YearEndStatementResponse(year, statements);
     }
 
     private BigDecimal nz(BigDecimal value) {

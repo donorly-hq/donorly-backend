@@ -36,6 +36,8 @@ public class DonorController {
     private final DonorProfileService profileService;
     private final DonorNoteService noteService;
     private final DonorTagService tagService;
+    private final org.donorly.backend.service.DonorImportService importService;
+    private final org.donorly.backend.service.DonorMergeService mergeService;
 
     /**
      * Without {@code page}, returns the full list (legacy behavior, used by dropdowns).
@@ -57,6 +59,27 @@ public class DonorController {
     @PreAuthorize("hasAuthority('donors.read')")
     public List<Donor> myDonors() {
         return assignmentService.myDonors();
+    }
+
+    // ---- Import / duplicates / merge -------------------------------------
+
+    @PostMapping("/import")
+    @PreAuthorize("hasAuthority('donors.write')")
+    public org.donorly.backend.dto.DonorImportResult importDonors(
+            @Valid @RequestBody org.donorly.backend.dto.DonorImportRequest request) {
+        return importService.importDonors(request);
+    }
+
+    @GetMapping("/duplicates")
+    @PreAuthorize("hasAuthority('donors.write')")
+    public List<org.donorly.backend.dto.DuplicateGroupResponse> duplicates() {
+        return mergeService.findDuplicates();
+    }
+
+    @PostMapping("/merge")
+    @PreAuthorize("hasAuthority('donors.delete')")
+    public Donor merge(@Valid @RequestBody org.donorly.backend.dto.DonorMergeRequest request) {
+        return mergeService.merge(request);
     }
 
     @GetMapping("/{id}")

@@ -59,7 +59,7 @@ public class DonorService {
         return PageResponse.from(donorRepository.pageByOrganizationAndIds(orgId, q, assignedDonorIds, pageable));
     }
 
-    static int clampSize(int size) {
+    public static int clampSize(int size) {
         return Math.min(Math.max(size, 1), 200);
     }
 

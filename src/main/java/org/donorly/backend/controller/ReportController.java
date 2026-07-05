@@ -20,4 +20,11 @@ public class ReportController {
     public FundraisingReportResponse fundraising() {
         return reportService.fundraisingReport();
     }
+
+    @GetMapping("/year-end")
+    @PreAuthorize("hasAuthority('reports.view')")
+    public org.donorly.backend.dto.YearEndStatementResponse yearEnd(
+            @org.springframework.web.bind.annotation.RequestParam int year) {
+        return reportService.yearEndStatements(year);
+    }
 }

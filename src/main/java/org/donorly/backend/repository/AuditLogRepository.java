@@ -12,4 +12,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
     @Query("select max(a.createdAt) from AuditLog a where a.organizationId = :orgId")
     Instant findLastActivityAt(@Param("orgId") UUID orgId);
+
+    org.springframework.data.domain.Page<AuditLog> findByOrganizationId(
+            UUID organizationId, org.springframework.data.domain.Pageable pageable);
 }
