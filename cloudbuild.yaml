@@ -43,7 +43,7 @@ steps:
       - --min-instances=0
       - --max-instances=5
       - --set-env-vars=SPRING_PROFILES_ACTIVE=gcp
-      - --set-secrets=JWT_SECRET=donorly-jwt-secret:latest,PGPASSWORD=donorly-db-password:latest,MAIL_PASSWORD=donorly-mail-password:latest
+      - --set-secrets=JWT_SECRET=donorly-jwt-secret:latest,PGPASSWORD=donorly-db-password:latest,MAIL_PASSWORD=donorly-mail-password:latest,OPENAI_API_KEY=donorly-openai-key:latest
       - --set-env-vars=PGHOST=hayabusa.proxy.rlwy.net,PGPORT=29331,PGDATABASE=railway,PGUSER=postgres
       - --set-env-vars=MAIL_USERNAME=sam@donorly.org,MAIL_FROM_NAME=Donorly,APP_BASE_URL=https://donorly-portal-jyiyrqfy5q-uc.a.run.app
       - --set-env-vars=DONORLY_GCS_BUCKET=donorly-app-501321-org-assets

@@ -36,7 +36,8 @@ public class AiGateway {
     public AiGateway(
             @Value("${donorly.ai.openai-api-key:}") String apiKey,
             @Value("${donorly.ai.model:gpt-4o-mini}") String model) {
-        this.apiKey = apiKey;
+        // Trim to survive secrets stored with a trailing newline.
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
         this.http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
         this.objectMapper = new ObjectMapper();
