@@ -1,16 +1,19 @@
 package org.donorly.backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.FollowUpRequest;
 import org.donorly.backend.dto.FollowUpUpdateRequest;
 import org.donorly.backend.model.FollowUp;
+import org.donorly.backend.repository.CampaignRepository;
+import org.donorly.backend.repository.DonorRepository;
 import org.donorly.backend.repository.FollowUpRepository;
+import org.donorly.backend.repository.OrganizationMembershipRepository;
 import org.donorly.backend.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,6 +22,9 @@ import java.util.UUID;
 public class FollowUpService {
 
     private final FollowUpRepository followUpRepository;
+    private final DonorRepository donorRepository;
+    private final CampaignRepository campaignRepository;
+    private final OrganizationMembershipRepository membershipRepository;
     private final AuditService auditService;
 
     public List<FollowUp> list() {
@@ -41,8 +47,24 @@ public class FollowUpService {
 
     @Transactional
     public FollowUp create(FollowUpRequest request) {
+        UUID orgId = TenantContext.requireOrganizationId();
+        // Every foreign key from the request body must belong to the caller's org,
+        // otherwise a client could link a follow-up to another tenant's donor/campaign/user.
+        if (request.donorId() != null
+                && donorRepository.findByIdAndOrganizationId(request.donorId(), orgId).isEmpty()) {
+            throw new BadRequestException("Donor not found in this organization");
+        }
+        if (request.campaignId() != null
+                && campaignRepository.findByIdAndOrganizationId(request.campaignId(), orgId).isEmpty()) {
+            throw new BadRequestException("Campaign not found in this organization");
+        }
+        if (request.assignedToUserId() != null
+                && membershipRepository.findByOrganizationIdAndUserId(orgId, request.assignedToUserId()).isEmpty()) {
+            throw new BadRequestException("Assigned user is not a member of this organization");
+        }
+
         FollowUp followUp = new FollowUp();
-        followUp.setOrganizationId(TenantContext.requireOrganizationId());
+        followUp.setOrganizationId(orgId);
         followUp.setDonorId(request.donorId());
         followUp.setCampaignId(request.campaignId());
         followUp.setAssignedToUserId(request.assignedToUserId());

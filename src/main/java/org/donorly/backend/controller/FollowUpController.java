@@ -3,8 +3,8 @@ package org.donorly.backend.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.FollowUpRequest;
+import org.donorly.backend.dto.FollowUpResponse;
 import org.donorly.backend.dto.FollowUpUpdateRequest;
-import org.donorly.backend.model.FollowUp;
 import org.donorly.backend.service.FollowUpService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,32 +22,33 @@ public class FollowUpController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('followups.read')")
-    public List<FollowUp> list(@RequestParam(required = false) String status) {
-        return status != null ? followUpService.listByStatus(status) : followUpService.list();
+    public List<FollowUpResponse> list(@RequestParam(required = false) String status) {
+        var followUps = status != null ? followUpService.listByStatus(status) : followUpService.list();
+        return followUps.stream().map(FollowUpResponse::from).toList();
     }
 
     @GetMapping("/mine")
     @PreAuthorize("hasAuthority('followups.read')")
-    public List<FollowUp> mine() {
-        return followUpService.listMine();
+    public List<FollowUpResponse> mine() {
+        return followUpService.listMine().stream().map(FollowUpResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('followups.read')")
-    public FollowUp get(@PathVariable UUID id) {
-        return followUpService.get(id);
+    public FollowUpResponse get(@PathVariable UUID id) {
+        return FollowUpResponse.from(followUpService.get(id));
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('followups.write')")
-    public ResponseEntity<FollowUp> create(@Valid @RequestBody FollowUpRequest request) {
-        return ResponseEntity.ok(followUpService.create(request));
+    public ResponseEntity<FollowUpResponse> create(@Valid @RequestBody FollowUpRequest request) {
+        return ResponseEntity.ok(FollowUpResponse.from(followUpService.create(request)));
     }
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('followups.write')")
-    public FollowUp update(@PathVariable UUID id, @RequestBody FollowUpUpdateRequest request) {
-        return followUpService.update(id, request);
+    public FollowUpResponse update(@PathVariable UUID id, @RequestBody FollowUpUpdateRequest request) {
+        return FollowUpResponse.from(followUpService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

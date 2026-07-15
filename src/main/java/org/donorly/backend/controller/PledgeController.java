@@ -3,8 +3,8 @@ package org.donorly.backend.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.PledgeRequest;
+import org.donorly.backend.dto.PledgeResponse;
 import org.donorly.backend.dto.PledgeUpdateRequest;
-import org.donorly.backend.model.Pledge;
 import org.donorly.backend.service.PledgeService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,34 +27,34 @@ public class PledgeController {
     public Object list(@RequestParam(required = false) Integer page,
                        @RequestParam(defaultValue = "50") int size) {
         if (page == null) {
-            return pledgeService.list();
+            return pledgeService.list().stream().map(PledgeResponse::from).toList();
         }
-        return pledgeService.page(page, size);
+        return pledgeService.page(page, size).map(PledgeResponse::from);
     }
 
     @GetMapping("/pledges/{id}")
     @PreAuthorize("hasAuthority('pledges.read')")
-    public Pledge get(@PathVariable UUID id) {
-        return pledgeService.get(id);
+    public PledgeResponse get(@PathVariable UUID id) {
+        return PledgeResponse.from(pledgeService.get(id));
     }
 
     @GetMapping("/campaigns/{campaignId}/pledges")
     @PreAuthorize("hasAuthority('pledges.read')")
-    public List<Pledge> listByCampaign(@PathVariable UUID campaignId) {
-        return pledgeService.listByCampaign(campaignId);
+    public List<PledgeResponse> listByCampaign(@PathVariable UUID campaignId) {
+        return pledgeService.listByCampaign(campaignId).stream().map(PledgeResponse::from).toList();
     }
 
     @GetMapping("/donors/{donorId}/pledges")
     @PreAuthorize("hasAuthority('pledges.read')")
-    public List<Pledge> listByDonor(@PathVariable UUID donorId) {
-        return pledgeService.listByDonor(donorId);
+    public List<PledgeResponse> listByDonor(@PathVariable UUID donorId) {
+        return pledgeService.listByDonor(donorId).stream().map(PledgeResponse::from).toList();
     }
 
     @PostMapping("/campaigns/{campaignId}/pledges")
     @PreAuthorize("hasAuthority('pledges.write')")
-    public ResponseEntity<Pledge> create(@PathVariable UUID campaignId,
-                                         @Valid @RequestBody PledgeRequest request) {
-        return ResponseEntity.ok(pledgeService.create(campaignId, request));
+    public ResponseEntity<PledgeResponse> create(@PathVariable UUID campaignId,
+                                                 @Valid @RequestBody PledgeRequest request) {
+        return ResponseEntity.ok(PledgeResponse.from(pledgeService.create(campaignId, request)));
     }
 
     /** One-tap entry for live events: find-or-create donor + pledge in one call. */
@@ -82,8 +82,8 @@ public class PledgeController {
 
     @PatchMapping("/pledges/{id}")
     @PreAuthorize("hasAuthority('pledges.write')")
-    public Pledge update(@PathVariable UUID id, @RequestBody PledgeUpdateRequest request) {
-        return pledgeService.update(id, request);
+    public PledgeResponse update(@PathVariable UUID id, @RequestBody PledgeUpdateRequest request) {
+        return PledgeResponse.from(pledgeService.update(id, request));
     }
 
     @DeleteMapping("/pledges/{id}")

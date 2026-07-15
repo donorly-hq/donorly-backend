@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.CampaignDashboardResponse;
 import org.donorly.backend.dto.CampaignRequest;
-import org.donorly.backend.model.Campaign;
+import org.donorly.backend.dto.CampaignResponse;
 import org.donorly.backend.service.CampaignService;
 import org.donorly.backend.service.DashboardService;
 import org.springframework.http.ResponseEntity;
@@ -24,14 +24,14 @@ public class CampaignController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('campaigns.read')")
-    public List<Campaign> list() {
-        return campaignService.list();
+    public List<CampaignResponse> list() {
+        return campaignService.list().stream().map(CampaignResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('campaigns.read')")
-    public Campaign get(@PathVariable UUID id) {
-        return campaignService.get(id);
+    public CampaignResponse get(@PathVariable UUID id) {
+        return CampaignResponse.from(campaignService.get(id));
     }
 
     @GetMapping("/{id}/dashboard")
@@ -42,14 +42,14 @@ public class CampaignController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('campaigns.manage')")
-    public ResponseEntity<Campaign> create(@Valid @RequestBody CampaignRequest request) {
-        return ResponseEntity.ok(campaignService.create(request));
+    public ResponseEntity<CampaignResponse> create(@Valid @RequestBody CampaignRequest request) {
+        return ResponseEntity.ok(CampaignResponse.from(campaignService.create(request)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('campaigns.manage')")
-    public Campaign update(@PathVariable UUID id, @Valid @RequestBody CampaignRequest request) {
-        return campaignService.update(id, request);
+    public CampaignResponse update(@PathVariable UUID id, @Valid @RequestBody CampaignRequest request) {
+        return CampaignResponse.from(campaignService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

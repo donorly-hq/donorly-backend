@@ -11,7 +11,6 @@ import org.donorly.backend.repository.DonorAssignmentRepository;
 import org.donorly.backend.repository.DonorRepository;
 import org.donorly.backend.security.SecurityUtils;
 import org.donorly.backend.tenant.TenantContext;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -46,8 +45,8 @@ public class DonorService {
     /** Paginated, optionally-searched donor list. Ambassadors only see assigned donors. */
     public PageResponse<Donor> page(int page, int size, String search) {
         UUID orgId = TenantContext.requireOrganizationId();
-        Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size),
-                Sort.by(Sort.Direction.ASC, "fullName"));
+        Pageable pageable = org.donorly.backend.common.PaginationHelper.pageRequest(
+                page, size, Sort.by(Sort.Direction.ASC, "fullName"));
         String q = toLikePattern(search);
         if (canReadAllDonors()) {
             return PageResponse.from(donorRepository.pageByOrganization(orgId, q, pageable));
@@ -57,10 +56,6 @@ public class DonorService {
             return PageResponse.empty(page, size);
         }
         return PageResponse.from(donorRepository.pageByOrganizationAndIds(orgId, q, assignedDonorIds, pageable));
-    }
-
-    public static int clampSize(int size) {
-        return Math.min(Math.max(size, 1), 200);
     }
 
     static String toLikePattern(String search) {

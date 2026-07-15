@@ -38,9 +38,9 @@ public class EmailService {
             msg.setSubject(subject);
             msg.setText(body);
             mailSender.send(msg);
-            log.info("Email sent to {} — {}", to, subject);
+            log.info("Email sent — {}", subject);
         } catch (Exception e) {
-            log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
+            log.error("Failed to send email ({}): {}", subject, e.getMessage(), e);
         }
     }
 
@@ -55,9 +55,9 @@ public class EmailService {
             helper.setSubject(subject);
             helper.setText(htmlBody, true);
             mailSender.send(message);
-            log.info("HTML email sent to {} — {}", to, subject);
+            log.info("HTML email sent — {}", subject);
         } catch (Exception e) {
-            log.error("Failed to send HTML email to {}: {}", to, e.getMessage(), e);
+            log.error("Failed to send HTML email ({}): {}", subject, e.getMessage(), e);
         }
     }
 }

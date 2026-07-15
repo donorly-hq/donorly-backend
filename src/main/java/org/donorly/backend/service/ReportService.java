@@ -40,7 +40,9 @@ public class ReportService {
         BigDecimal totalCollected = nz(pledgeRepository.sumCollectedByOrganization(orgId));
 
         var pledges = pledgeRepository.findByOrganizationId(orgId);
-        long fulfilledPledges = pledges.stream().filter(p -> "fulfilled".equals(p.getStatus())).count();
+        long fulfilledPledges = pledges.stream()
+                .filter(p -> org.donorly.backend.model.PledgeStatus.FULFILLED.matches(p.getStatus()))
+                .count();
         long openFollowUps = followUpRepository.countByOrganizationIdAndStatus(orgId, "open");
 
         YearMonth thisMonth = YearMonth.now();

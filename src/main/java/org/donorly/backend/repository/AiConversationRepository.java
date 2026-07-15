@@ -7,6 +7,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface AiConversationRepository extends JpaRepository<AiConversation, UUID> {
-    List<AiConversation> findByOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
     List<AiConversation> findTop20ByOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
 }

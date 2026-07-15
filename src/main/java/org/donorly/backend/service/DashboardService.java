@@ -43,6 +43,7 @@ public class DashboardService {
     private final OrganizationMembershipRepository membershipRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final CampaignProgressService campaignProgressService;
 
     public OrgDashboardResponse orgDashboard() {
         UUID orgId = TenantContext.requireOrganizationId();
@@ -139,9 +140,10 @@ public class DashboardService {
         long pledgeCount = 0;
 
         for (Campaign c : myCampaigns) {
-            BigDecimal p = nz(pledgeRepository.sumPledgedByCampaign(orgId, c.getId()));
-            BigDecimal col = nz(pledgeRepository.sumCollectedByCampaign(orgId, c.getId()));
-            long pc = pledgeRepository.findByOrganizationIdAndCampaignId(orgId, c.getId()).size();
+            var progress = campaignProgressService.progress(orgId, c.getId());
+            BigDecimal p = progress.pledged();
+            BigDecimal col = progress.collected();
+            long pc = progress.pledgeCount();
             totalPledged   = totalPledged.add(p);
             totalCollected = totalCollected.add(col);
             pledgeCount   += pc;
@@ -154,11 +156,19 @@ public class DashboardService {
         Role ambassadorRole = roleRepository.findByCode("ambassador").orElse(null);
         List<CampaignManagerDashboardResponse.AmbassadorItem> ambassadors = new ArrayList<>();
         if (ambassadorRole != null) {
-            for (var m : membershipRepository.findByOrganizationIdAndCreatedBy(orgId, userId)) {
-                if (!ambassadorRole.getId().equals(m.getRoleId())) continue;
-                userRepository.findById(m.getUserId()).ifPresent(u ->
-                        ambassadors.add(new CampaignManagerDashboardResponse.AmbassadorItem(
-                                u.getId(), u.getFullName(), u.getEmail(), m.getStatus())));
+            var created = membershipRepository.findByOrganizationIdAndCreatedBy(orgId, userId).stream()
+                    .filter(m -> ambassadorRole.getId().equals(m.getRoleId()))
+                    .toList();
+            // Batch-load users in one query instead of one findById per membership (N+1).
+            var usersById = new java.util.HashMap<UUID, org.donorly.backend.model.User>();
+            userRepository.findAllById(created.stream().map(m -> m.getUserId()).toList())
+                    .forEach(u -> usersById.put(u.getId(), u));
+            for (var m : created) {
+                var u = usersById.get(m.getUserId());
+                if (u != null) {
+                    ambassadors.add(new CampaignManagerDashboardResponse.AmbassadorItem(
+                            u.getId(), u.getFullName(), u.getEmail(), m.getStatus()));
+                }
             }
         }
 
@@ -179,9 +189,10 @@ public class DashboardService {
         UUID orgId = TenantContext.requireOrganizationId();
         Campaign campaign = campaignRepository.findByIdAndOrganizationId(campaignId, orgId)
                 .orElseThrow(() -> new NotFoundException("Campaign not found"));
-        BigDecimal pledged = nz(pledgeRepository.sumPledgedByCampaign(orgId, campaignId));
-        BigDecimal collected = nz(pledgeRepository.sumCollectedByCampaign(orgId, campaignId));
-        int pledgeCount = pledgeRepository.findByOrganizationIdAndCampaignId(orgId, campaignId).size();
+        var progress = campaignProgressService.progress(orgId, campaignId);
+        BigDecimal pledged = progress.pledged();
+        BigDecimal collected = progress.collected();
+        int pledgeCount = progress.pledgeCount();
         return new CampaignDashboardResponse(
                 campaign.getId(),
                 campaign.getName(),

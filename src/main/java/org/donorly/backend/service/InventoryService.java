@@ -12,6 +12,7 @@ import org.donorly.backend.model.InventoryItem;
 import org.donorly.backend.model.User;
 import org.donorly.backend.repository.InventoryAssignmentRepository;
 import org.donorly.backend.repository.InventoryItemRepository;
+import org.donorly.backend.repository.OrganizationMembershipRepository;
 import org.donorly.backend.repository.UserRepository;
 import org.donorly.backend.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class InventoryService {
     private final InventoryItemRepository itemRepository;
     private final InventoryAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
+    private final OrganizationMembershipRepository membershipRepository;
     private final AuditService auditService;
 
     public List<InventoryItemResponse> list() {
@@ -120,8 +122,11 @@ public class InventoryService {
         if (request.holderUserId() == null && (holderName == null || holderName.isEmpty())) {
             throw new BadRequestException("Pick a team member or enter the holder's name");
         }
-        if (request.holderUserId() != null && userRepository.findById(request.holderUserId()).isEmpty()) {
-            throw new BadRequestException("Unknown team member");
+        if (request.holderUserId() != null
+                && membershipRepository.findByOrganizationIdAndUserId(orgId, request.holderUserId()).isEmpty()) {
+            // Validate against org membership, not global users, so inventory can never be
+            // checked out to someone outside this tenant (cross-tenant integrity).
+            throw new BadRequestException("That user is not a member of this organization");
         }
 
         InventoryAssignment assignment = new InventoryAssignment();

@@ -50,12 +50,23 @@ public class OrganizationService {
     /** Active members of an org — for platform-admin owner transfer UI. */
     public List<OrgMemberSummary> listMembers(UUID orgId) {
         findActive(orgId);
-        return membershipRepository.findByOrganizationId(orgId).stream()
-                .filter(m -> "active".equals(m.getStatus()))
+        List<OrganizationMembership> memberships = membershipRepository.findByOrganizationId(orgId).stream()
+                .filter(m -> MembershipStatus.ACTIVE.matches(m.getStatus()))
+                .toList();
+
+        // Batch-load users and roles (2 queries) instead of 2 findById calls per member.
+        var usersById = new java.util.HashMap<UUID, User>();
+        userRepository.findAllById(memberships.stream().map(OrganizationMembership::getUserId).toList())
+                .forEach(u -> usersById.put(u.getId(), u));
+        var rolesById = new java.util.HashMap<UUID, Role>();
+        roleRepository.findAllById(memberships.stream().map(OrganizationMembership::getRoleId).toList())
+                .forEach(r -> rolesById.put(r.getId(), r));
+
+        return memberships.stream()
                 .map(m -> {
-                    User user = userRepository.findById(m.getUserId()).orElse(null);
+                    User user = usersById.get(m.getUserId());
                     if (user == null) return null;
-                    Role role = roleRepository.findById(m.getRoleId()).orElse(null);
+                    Role role = rolesById.get(m.getRoleId());
                     return new OrgMemberSummary(
                             user.getId(),
                             user.getFullName(),
@@ -177,7 +188,7 @@ public class OrganizationService {
         OrganizationMembership membership = membershipRepository.findByOrganizationIdAndUserId(orgId, userId)
                 .orElseThrow(() -> new NotFoundException("This person is not a member of the organization"));
 
-        if (!"active".equals(membership.getStatus())) {
+        if (!MembershipStatus.ACTIVE.matches(membership.getStatus())) {
             throw new BadRequestException("Only active members can be promoted to owner");
         }
 
@@ -188,7 +199,7 @@ public class OrganizationService {
 
         demotePreviousOwners(orgId, userId);
         membership.setRoleId(ownerRole.getId());
-        membership.setStatus("active");
+        membership.setStatus(MembershipStatus.ACTIVE.value());
         membershipRepository.save(membership);
 
         User owner = userRepository.findById(userId)
@@ -226,7 +237,7 @@ public class OrganizationService {
                     .orElse(null);
 
             if (membership != null && membership.getRoleId().equals(ownerRole.getId())
-                    && "active".equals(membership.getStatus())) {
+                    && MembershipStatus.ACTIVE.matches(membership.getStatus())) {
                 return user;
             }
 
@@ -234,14 +245,14 @@ public class OrganizationService {
 
             if (membership != null) {
                 membership.setRoleId(ownerRole.getId());
-                membership.setStatus("active");
+                membership.setStatus(MembershipStatus.ACTIVE.value());
                 membershipRepository.save(membership);
             } else {
                 OrganizationMembership created = new OrganizationMembership();
                 created.setOrganizationId(orgId);
                 created.setUserId(user.getId());
                 created.setRoleId(ownerRole.getId());
-                created.setStatus("active");
+                created.setStatus(MembershipStatus.ACTIVE.value());
                 membershipRepository.save(created);
             }
             return user;
@@ -268,7 +279,7 @@ public class OrganizationService {
         membership.setOrganizationId(orgId);
         membership.setUserId(created.getId());
         membership.setRoleId(ownerRole.getId());
-        membership.setStatus("active");
+        membership.setStatus(MembershipStatus.ACTIVE.value());
         membershipRepository.save(membership);
 
         return created;
@@ -284,7 +295,7 @@ public class OrganizationService {
                 .filter(m -> newOwnerUserId == null || !m.getUserId().equals(newOwnerUserId))
                 .forEach(m -> {
                     m.setRoleId(adminRole.getId());
-                    m.setStatus("active");
+                    m.setStatus(MembershipStatus.ACTIVE.value());
                     membershipRepository.save(m);
                     invalidateSession(m.getUserId());
                 });

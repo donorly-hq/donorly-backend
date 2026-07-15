@@ -119,6 +119,21 @@
       <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Boot 4 modular split: MockMvc auto-configuration lives in its own starter. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Real Postgres in Docker for integration tests: the Flyway migrations use
+         Postgres-specific SQL (partial indexes, ON CONFLICT), so an in-memory H2
+         would not exercise the schema we actually run in production. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>1.21.4</version>
+      <scope>test</scope>
+    </dependency>
 
   </dependencies>
 

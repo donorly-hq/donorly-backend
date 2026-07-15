@@ -33,7 +33,7 @@ public class ExportController {
     }
 
     @GetMapping("/pledges")
-    @PreAuthorize("hasAuthority('pledges.read')")
+    @PreAuthorize("hasAuthority('reports.view')")
     public ResponseEntity<byte[]> pledges() {
         return csv("pledges", csvExportService.pledgesCsv());
     }

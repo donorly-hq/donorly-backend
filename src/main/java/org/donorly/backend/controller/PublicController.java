@@ -48,12 +48,14 @@ public class PublicController {
     }
 
     @GetMapping("/checkin/{eventId}/{code}")
-    public PublicCheckinInfo checkinInfo(@PathVariable UUID eventId, @PathVariable String code) {
-        return publicPortalService.checkinInfo(eventId, code);
+    public PublicCheckinInfo checkinInfo(@PathVariable UUID eventId, @PathVariable String code,
+                                         HttpServletRequest http) {
+        return publicPortalService.checkinInfo(eventId, code, clientIp(http));
     }
 
     @PostMapping("/checkin/{eventId}/{code}")
-    public PublicCheckinInfo selfCheckIn(@PathVariable UUID eventId, @PathVariable String code) {
-        return publicPortalService.selfCheckIn(eventId, code);
+    public PublicCheckinInfo selfCheckIn(@PathVariable UUID eventId, @PathVariable String code,
+                                         HttpServletRequest http) {
+        return publicPortalService.selfCheckIn(eventId, code, clientIp(http));
     }
 }

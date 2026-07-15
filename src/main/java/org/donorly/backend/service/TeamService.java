@@ -50,9 +50,15 @@ public class TeamService {
         Map<UUID, Role> rolesById = new HashMap<>();
         roleRepository.findAll().forEach(r -> rolesById.put(r.getId(), r));
 
+        List<OrganizationMembership> memberships = membershipRepository.findByOrganizationId(orgId);
+        // Batch-load users (1 query) instead of one findById per membership (N+1).
+        Map<UUID, User> usersById = new HashMap<>();
+        userRepository.findAllById(memberships.stream().map(OrganizationMembership::getUserId).toList())
+                .forEach(u -> usersById.put(u.getId(), u));
+
         List<TeamMemberResponse> result = new ArrayList<>();
-        for (OrganizationMembership m : membershipRepository.findByOrganizationId(orgId)) {
-            User user = userRepository.findById(m.getUserId()).orElse(null);
+        for (OrganizationMembership m : memberships) {
+            User user = usersById.get(m.getUserId());
             if (user == null) {
                 continue;
             }
@@ -76,7 +82,7 @@ public class TeamService {
     public List<TeamMemberResponse> listActiveMembers() {
         List<TeamMemberResponse> members = new ArrayList<>();
         for (TeamMemberResponse m : listMembers()) {
-            if ("active".equals(m.status())) {
+            if (org.donorly.backend.model.MembershipStatus.ACTIVE.matches(m.status())) {
                 members.add(m);
             }
         }
@@ -105,7 +111,7 @@ public class TeamService {
             membership.setRoleId(role.getId());
         }
         if (request.status() != null && !request.status().isBlank()) {
-            if (!Set.of("active", "disabled", "invited").contains(request.status())) {
+            if (!org.donorly.backend.model.MembershipStatus.isValid(request.status())) {
                 throw new BadRequestException("Invalid status");
             }
             membership.setStatus(request.status());
@@ -180,8 +186,10 @@ public class TeamService {
                 buildInviteEmail(orgName, role.getName(), inviteLink)
         );
 
+        // The raw token travels only in the invite email. Returning it in the API response
+        // would let anyone who can create invitations impersonate the invitee's accept link.
         return new InvitationResponse(saved.getId(), saved.getEmail(), role.getCode(), role.getName(),
-                saved.getStatus(), saved.getExpiresAt(), saved.getCreatedAt(), rawToken);
+                saved.getStatus(), saved.getExpiresAt(), saved.getCreatedAt(), null);
     }
 
     @Transactional
@@ -250,7 +258,7 @@ public class TeamService {
             membership.setOrganizationId(invitation.getOrganizationId());
             membership.setUserId(userId);
             membership.setRoleId(invitation.getRoleId());
-            membership.setStatus("active");
+            membership.setStatus(org.donorly.backend.model.MembershipStatus.ACTIVE.value());
             membershipRepository.save(membership);
         }
 

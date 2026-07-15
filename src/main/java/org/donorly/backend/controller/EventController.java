@@ -3,8 +3,8 @@ package org.donorly.backend.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.EventRequest;
+import org.donorly.backend.dto.EventResponse;
 import org.donorly.backend.dto.EventSummaryResponse;
-import org.donorly.backend.model.Event;
 import org.donorly.backend.service.EventService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,14 +22,14 @@ public class EventController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('events.read')")
-    public List<Event> list() {
-        return eventService.list();
+    public List<EventResponse> list() {
+        return eventService.list().stream().map(EventResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('events.read')")
-    public Event get(@PathVariable UUID id) {
-        return eventService.get(id);
+    public EventResponse get(@PathVariable UUID id) {
+        return EventResponse.from(eventService.get(id));
     }
 
     @GetMapping("/{id}/summary")
@@ -40,14 +40,14 @@ public class EventController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('events.manage')")
-    public ResponseEntity<Event> create(@Valid @RequestBody EventRequest request) {
-        return ResponseEntity.ok(eventService.create(request));
+    public ResponseEntity<EventResponse> create(@Valid @RequestBody EventRequest request) {
+        return ResponseEntity.ok(EventResponse.from(eventService.create(request)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('events.manage')")
-    public Event update(@PathVariable UUID id, @Valid @RequestBody EventRequest request) {
-        return eventService.update(id, request);
+    public EventResponse update(@PathVariable UUID id, @Valid @RequestBody EventRequest request) {
+        return EventResponse.from(eventService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

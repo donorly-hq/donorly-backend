@@ -45,9 +45,7 @@ public class CommunicationService {
 
     public org.donorly.backend.dto.PageResponse<CommunicationMessageResponse> pageMessages(int page, int size) {
         UUID orgId = TenantContext.requireOrganizationId();
-        var pageable = org.springframework.data.domain.PageRequest.of(
-                Math.max(page, 0), DonorService.clampSize(size),
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        var pageable = org.donorly.backend.common.PaginationHelper.newestFirst(page, size);
         return org.donorly.backend.dto.PageResponse.from(messageRepository.findByOrganizationId(orgId, pageable))
                 .map(this::toResponse);
     }
@@ -112,7 +110,8 @@ public class CommunicationService {
 
         if (recipient == null || recipient.isBlank()) {
             message.setStatus("skipped");
-            message.setErrorMessage(channel.equals("email") ? "Donor has no email" : "Donor has no phone");
+            message.setErrorMessage(org.donorly.backend.model.CommunicationChannel.EMAIL.matches(channel)
+                    ? "Donor has no email" : "Donor has no phone");
             CommunicationMessage saved = messageRepository.save(message);
             return toResponse(saved);
         }
@@ -171,17 +170,16 @@ public class CommunicationService {
     }
 
     private String recipientFor(Donor donor, String channel) {
-        if ("email".equals(channel)) {
-            return donor.getEmail();
-        }
-        if ("sms".equals(channel)) {
-            return donor.getPhone();
-        }
-        return null;
+        var parsed = org.donorly.backend.model.CommunicationChannel.fromValue(channel);
+        if (parsed == null) return null;
+        return switch (parsed) {
+            case EMAIL -> donor.getEmail();
+            case SMS -> donor.getPhone();
+        };
     }
 
     private void validateChannel(String channel) {
-        if (!"email".equals(channel) && !"sms".equals(channel)) {
+        if (!org.donorly.backend.model.CommunicationChannel.isValid(channel)) {
             throw new BadRequestException("Channel must be email or sms");
         }
     }

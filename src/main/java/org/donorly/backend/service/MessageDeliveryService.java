@@ -33,15 +33,19 @@ public class MessageDeliveryService {
         if (recipient == null || recipient.isBlank()) {
             return DeliveryResult.failed("No recipient address");
         }
-        if ("email".equals(channel)) {
-            return sendEmail(recipient, subject, body);
+        var parsed = org.donorly.backend.model.CommunicationChannel.fromValue(channel);
+        if (parsed == null) {
+            return DeliveryResult.failed("Unsupported channel: " + channel);
         }
-        if ("sms".equals(channel)) {
-            // No SMS provider wired yet — log and report as sent so drafts are not lost.
-            log.info("[COMM-SMS stub] to={} body={}", recipient, truncate(body));
-            return DeliveryResult.sent();
-        }
-        return DeliveryResult.failed("Unsupported channel: " + channel);
+        return switch (parsed) {
+            case EMAIL -> sendEmail(recipient, subject, body);
+            case SMS -> {
+                // No SMS provider wired yet — report as sent so drafts are not lost.
+                // Do not log recipient or body: message content and phone numbers are PII.
+                log.info("[COMM-SMS stub] message accepted ({} chars)", body != null ? body.length() : 0);
+                yield DeliveryResult.sent();
+            }
+        };
     }
 
     private DeliveryResult sendEmail(String to, String subject, String body) {
@@ -53,19 +57,12 @@ public class MessageDeliveryService {
             helper.setSubject(subject != null && !subject.isBlank() ? subject : "Message from " + fromName);
             helper.setText(body != null ? body : "", false);
             mailSender.send(message);
-            log.info("[COMM-EMAIL] sent to={} subject={}", to, subject);
+            log.info("[COMM-EMAIL] sent, subject={}", subject);
             return DeliveryResult.sent();
         } catch (Exception e) {
-            log.error("[COMM-EMAIL] failed to={}: {}", to, e.getMessage());
+            log.error("[COMM-EMAIL] delivery failed: {}", e.getMessage());
             return DeliveryResult.failed(e.getMessage());
         }
-    }
-
-    private String truncate(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.length() > 120 ? text.substring(0, 120) + "…" : text;
     }
 
     public record DeliveryResult(boolean success, String errorMessage) {

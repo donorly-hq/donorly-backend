@@ -40,7 +40,7 @@ public class InventoryController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('inventory.assign')")
+    @PreAuthorize("hasAuthority('inventory.write')")
     public ResponseEntity<?> delete(@PathVariable UUID id) {
         inventoryService.delete(id);
         return ResponseEntity.noContent().build();

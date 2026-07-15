@@ -36,8 +36,8 @@ public class AuthToken {
     @Column(nullable = false, length = 32)
     private String purpose;
 
-    /** OTP digits (login_otp only). */
-    @Column(length = 16)
+    /** SHA-256 hex digest of the OTP code (login_otp only). */
+    @Column(length = 64)
     private String code;
 
     /** Extra state carried across the challenge, e.g. the org slug used at login. */

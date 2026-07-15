@@ -6,6 +6,7 @@ import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.RegistrationRequest;
 import org.donorly.backend.model.Event;
 import org.donorly.backend.model.EventRegistration;
+import org.donorly.backend.repository.DonorRepository;
 import org.donorly.backend.repository.EventRegistrationRepository;
 import org.donorly.backend.repository.EventRepository;
 import org.donorly.backend.tenant.TenantContext;
@@ -26,6 +27,7 @@ public class EventRegistrationService {
 
     private final EventRegistrationRepository registrationRepository;
     private final EventRepository eventRepository;
+    private final DonorRepository donorRepository;
     private final AuditService auditService;
     private final SecureRandom random = new SecureRandom();
 
@@ -39,6 +41,10 @@ public class EventRegistrationService {
     public EventRegistration register(UUID eventId, RegistrationRequest request) {
         UUID orgId = TenantContext.requireOrganizationId();
         requireEvent(eventId, orgId);
+        if (request.donorId() != null
+                && donorRepository.findByIdAndOrganizationId(request.donorId(), orgId).isEmpty()) {
+            throw new BadRequestException("Donor not found in this organization");
+        }
 
         EventRegistration reg = new EventRegistration();
         reg.setOrganizationId(orgId);

@@ -1,5 +1,6 @@
 package org.donorly.backend.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.ForgotPasswordRequest;
@@ -34,15 +35,17 @@ public class AuthController {
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<LoginResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        return ResponseEntity.ok(authService.verifyOtp(request.challengeId(), request.code()));
+    public ResponseEntity<LoginResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request,
+                                                   HttpServletRequest http) {
+        return ResponseEntity.ok(authService.verifyOtp(request.challengeId(), request.code(), clientIp(http)));
     }
 
     /** Finishes login for users who belong to multiple organizations. */
     @PostMapping("/select-org")
-    public ResponseEntity<LoginResponse> selectOrg(@Valid @RequestBody SelectOrgRequest request) {
+    public ResponseEntity<LoginResponse> selectOrg(@Valid @RequestBody SelectOrgRequest request,
+                                                   HttpServletRequest http) {
         return ResponseEntity.ok(
-                authService.selectOrganization(request.challengeId(), request.organizationId()));
+                authService.selectOrganization(request.challengeId(), request.organizationId(), clientIp(http)));
     }
 
     /** Moves the current session to another org the user belongs to; returns a new token. */
@@ -75,8 +78,9 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request.token(), request.newPassword());
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request,
+                                           HttpServletRequest http) {
+        authService.resetPassword(request.token(), request.newPassword(), clientIp(http));
         return ResponseEntity.ok(Map.of("message", "Password updated. You can now sign in."));
     }
 
@@ -95,5 +99,14 @@ public class AuthController {
             authService.logout(userId, jti);
         }
         return ResponseEntity.ok(Map.of("message", "Logged out"));
+    }
+
+    /** Cloud Run terminates TLS at the load balancer; the caller is the first X-Forwarded-For hop. */
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

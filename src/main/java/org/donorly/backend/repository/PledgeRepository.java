@@ -1,7 +1,9 @@
 package org.donorly.backend.repository;
 
+import jakarta.persistence.LockModeType;
 import org.donorly.backend.model.Pledge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +20,16 @@ public interface PledgeRepository extends JpaRepository<Pledge, UUID> {
     List<Pledge> findByOrganizationIdAndCampaignId(UUID organizationId, UUID campaignId);
     List<Pledge> findByOrganizationIdAndDonorId(UUID organizationId, UUID donorId);
     Optional<Pledge> findByIdAndOrganizationId(UUID id, UUID organizationId);
+
+    /**
+     * Same lookup but takes a row-level write lock (SELECT ... FOR UPDATE) so two
+     * concurrent payments against the same pledge cannot both read the old
+     * collectedAmount and lose one update. The lock is held until the surrounding
+     * transaction commits.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Pledge p where p.id = :id and p.organizationId = :orgId")
+    Optional<Pledge> findByIdAndOrganizationIdForUpdate(@Param("id") UUID id, @Param("orgId") UUID orgId);
 
     @Query("select coalesce(sum(p.amount), 0) from Pledge p where p.organizationId = :orgId")
     BigDecimal sumPledgedByOrganization(@Param("orgId") UUID orgId);

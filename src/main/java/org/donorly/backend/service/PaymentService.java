@@ -21,9 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.Year;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,6 +34,8 @@ public class PaymentService {
     private final PledgeRepository pledgeRepository;
     private final DonorRepository donorRepository;
     private final OrganizationSettingsRepository settingsRepository;
+    private final ReceiptNumberService receiptNumberService;
+    private final DonorLifetimeGivingService lifetimeGivingService;
     private final AuditService auditService;
 
     public List<PaymentResponse> list() {
@@ -46,9 +46,7 @@ public class PaymentService {
     }
 
     public org.donorly.backend.dto.PageResponse<PaymentResponse> page(int page, int size) {
-        var pageable = org.springframework.data.domain.PageRequest.of(
-                Math.max(page, 0), DonorService.clampSize(size),
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        var pageable = org.donorly.backend.common.PaginationHelper.newestFirst(page, size);
         return org.donorly.backend.dto.PageResponse.from(
                 paymentRepository.findByOrganizationId(TenantContext.requireOrganizationId(), pageable))
                 .map(this::toResponse);
@@ -70,7 +68,9 @@ public class PaymentService {
     @Transactional
     public PaymentResponse record(PaymentRequest request) {
         UUID orgId = TenantContext.requireOrganizationId();
-        Pledge pledge = pledgeRepository.findByIdAndOrganizationId(request.pledgeId(), orgId)
+        // Lock the pledge row for the duration of this transaction so concurrent
+        // payments serialize and cannot overwrite each other's collectedAmount.
+        Pledge pledge = pledgeRepository.findByIdAndOrganizationIdForUpdate(request.pledgeId(), orgId)
                 .orElseThrow(() -> new NotFoundException("Pledge not found"));
 
         BigDecimal newCollected = pledge.getCollectedAmount().add(request.amount());
@@ -92,13 +92,13 @@ public class PaymentService {
 
         pledge.setCollectedAmount(newCollected);
         if (newCollected.compareTo(pledge.getAmount()) >= 0) {
-            pledge.setStatus("fulfilled");
-        } else if ("pending".equals(pledge.getStatus())) {
-            pledge.setStatus("active");
+            pledge.setStatus(org.donorly.backend.model.PledgeStatus.FULFILLED.value());
+        } else if (org.donorly.backend.model.PledgeStatus.PENDING.matches(pledge.getStatus())) {
+            pledge.setStatus(org.donorly.backend.model.PledgeStatus.ACTIVE.value());
         }
         pledgeRepository.save(pledge);
 
-        recomputeDonorLifetimeGiving(orgId, pledge.getDonorId());
+        lifetimeGivingService.recompute(orgId, pledge.getDonorId());
 
         Receipt receipt = null;
         if (request.issueReceipt()) {
@@ -139,8 +139,7 @@ public class PaymentService {
                 .filter(p -> p != null && !p.isBlank())
                 .orElse("RCP");
 
-        long seq = receiptRepository.countByOrganizationId(orgId) + 1;
-        String receiptNumber = "%s-%d-%05d".formatted(prefix, Year.now().getValue(), seq);
+        String receiptNumber = receiptNumberService.nextReceiptNumber(orgId, prefix);
 
         Receipt receipt = new Receipt();
         receipt.setOrganizationId(orgId);
@@ -150,17 +149,6 @@ public class PaymentService {
         receipt.setAmount(payment.getAmount());
         receipt.setIssuedBy(TenantContext.getUserId());
         return receiptRepository.save(receipt);
-    }
-
-    private void recomputeDonorLifetimeGiving(UUID orgId, UUID donorId) {
-        BigDecimal collected = pledgeRepository.findByOrganizationIdAndDonorId(orgId, donorId).stream()
-                .map(Pledge::getCollectedAmount)
-                .filter(v -> v != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        donorRepository.findByIdAndOrganizationId(donorId, orgId).ifPresent(donor -> {
-            donor.setLifetimeGiving(collected);
-            donorRepository.save(donor);
-        });
     }
 
     private Payment findPayment(UUID id) {

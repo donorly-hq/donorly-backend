@@ -6,11 +6,9 @@ import org.donorly.backend.dto.PageResponse;
 import org.donorly.backend.model.AuditLog;
 import org.donorly.backend.model.User;
 import org.donorly.backend.repository.AuditLogRepository;
+import org.donorly.backend.common.PaginationHelper;
 import org.donorly.backend.repository.UserRepository;
-import org.donorly.backend.service.DonorService;
 import org.donorly.backend.tenant.TenantContext;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,8 +32,7 @@ public class AuditLogController {
     public PageResponse<AuditLogResponse> list(@RequestParam(defaultValue = "0") int page,
                                                @RequestParam(defaultValue = "50") int size) {
         UUID orgId = TenantContext.requireOrganizationId();
-        var pageable = PageRequest.of(Math.max(page, 0), DonorService.clampSize(size),
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PaginationHelper.newestFirst(page, size);
         var logs = auditLogRepository.findByOrganizationId(orgId, pageable);
 
         Map<UUID, User> actors = userRepository.findAllById(

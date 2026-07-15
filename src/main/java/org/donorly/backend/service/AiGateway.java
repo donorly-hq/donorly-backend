@@ -100,7 +100,8 @@ public class AiGateway {
     }
 
     private String buildStubResponse(String userPrompt) {
-        log.info("[AI-STUB] No API key configured. Returning stub for prompt: {}", userPrompt.substring(0, Math.min(80, userPrompt.length())));
+        // Do not log prompt content — it can contain donor names and other tenant data.
+        log.info("[AI-STUB] No API key configured. Returning stub response ({} char prompt).", userPrompt.length());
         return """
                 [AI Stub Mode — set OPENAI_API_KEY to enable real responses]
 

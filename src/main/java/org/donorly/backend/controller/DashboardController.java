@@ -18,13 +18,13 @@ public class DashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('reports.view')")
     public OrgDashboardResponse dashboard() {
         return dashboardService.orgDashboard();
     }
 
     @GetMapping("/my")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('followups.read')")
     public AmbassadorDashboardResponse myDashboard() {
         return dashboardService.ambassadorDashboard();
     }

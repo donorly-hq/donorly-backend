@@ -10,8 +10,8 @@ import org.donorly.backend.dto.DonorNoteResponse;
 import org.donorly.backend.dto.DonorProfileRequest;
 import org.donorly.backend.dto.DonorProfileResponse;
 import org.donorly.backend.dto.DonorRequest;
+import org.donorly.backend.dto.DonorResponse;
 import org.donorly.backend.dto.DonorTagResponse;
-import org.donorly.backend.model.Donor;
 import org.donorly.backend.service.Donor360Service;
 import org.donorly.backend.service.DonorAssignmentService;
 import org.donorly.backend.service.DonorNoteService;
@@ -50,15 +50,15 @@ public class DonorController {
                        @RequestParam(defaultValue = "50") int size,
                        @RequestParam(required = false) String q) {
         if (page == null) {
-            return donorService.list();
+            return donorService.list().stream().map(DonorResponse::from).toList();
         }
-        return donorService.page(page, size, q);
+        return donorService.page(page, size, q).map(DonorResponse::from);
     }
 
     @GetMapping("/mine")
     @PreAuthorize("hasAuthority('donors.read')")
-    public List<Donor> myDonors() {
-        return assignmentService.myDonors();
+    public List<DonorResponse> myDonors() {
+        return assignmentService.myDonors().stream().map(DonorResponse::from).toList();
     }
 
     // ---- Import / duplicates / merge -------------------------------------
@@ -78,14 +78,14 @@ public class DonorController {
 
     @PostMapping("/merge")
     @PreAuthorize("hasAuthority('donors.delete')")
-    public Donor merge(@Valid @RequestBody org.donorly.backend.dto.DonorMergeRequest request) {
-        return mergeService.merge(request);
+    public DonorResponse merge(@Valid @RequestBody org.donorly.backend.dto.DonorMergeRequest request) {
+        return DonorResponse.from(mergeService.merge(request));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('donors.read')")
-    public Donor get(@PathVariable UUID id) {
-        return donorService.get(id);
+    public DonorResponse get(@PathVariable UUID id) {
+        return DonorResponse.from(donorService.get(id));
     }
 
     @GetMapping("/{id}/detail")
@@ -155,14 +155,14 @@ public class DonorController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('donors.write')")
-    public ResponseEntity<Donor> create(@Valid @RequestBody DonorRequest request) {
-        return ResponseEntity.ok(donorService.create(request));
+    public ResponseEntity<DonorResponse> create(@Valid @RequestBody DonorRequest request) {
+        return ResponseEntity.ok(DonorResponse.from(donorService.create(request)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('donors.write')")
-    public Donor update(@PathVariable UUID id, @Valid @RequestBody DonorRequest request) {
-        return donorService.update(id, request);
+    public DonorResponse update(@PathVariable UUID id, @Valid @RequestBody DonorRequest request) {
+        return DonorResponse.from(donorService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

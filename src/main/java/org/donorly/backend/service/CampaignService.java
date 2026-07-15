@@ -1,17 +1,17 @@
 package org.donorly.backend.service;
 
 import lombok.RequiredArgsConstructor;
-import org.donorly.backend.common.ConflictException;
+import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.CampaignRequest;
 import org.donorly.backend.model.Campaign;
 import org.donorly.backend.repository.CampaignRepository;
+import org.donorly.backend.repository.OrganizationMembershipRepository;
 import org.donorly.backend.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -21,7 +21,15 @@ import java.util.UUID;
 public class CampaignService {
 
     private final CampaignRepository campaignRepository;
+    private final OrganizationMembershipRepository membershipRepository;
     private final AuditService auditService;
+
+    private void requireOrgMember(UUID orgId, UUID userId) {
+        if (userId != null
+                && membershipRepository.findByOrganizationIdAndUserId(orgId, userId).isEmpty()) {
+            throw new BadRequestException("Manager is not a member of this organization");
+        }
+    }
 
     public List<Campaign> list() {
         return campaignRepository.findByOrganizationId(TenantContext.requireOrganizationId());
@@ -35,6 +43,7 @@ public class CampaignService {
     @Transactional
     public Campaign create(CampaignRequest request) {
         UUID orgId = TenantContext.requireOrganizationId();
+        requireOrgMember(orgId, request.managedByUserId());
         Campaign campaign = new Campaign();
         campaign.setOrganizationId(orgId);
         campaign.setName(request.name());
@@ -57,6 +66,7 @@ public class CampaignService {
     @Transactional
     public Campaign update(UUID id, CampaignRequest request) {
         Campaign campaign = get(id);
+        requireOrgMember(campaign.getOrganizationId(), request.managedByUserId());
         campaign.setName(request.name());
         if (request.campaignType() != null) {
             campaign.setCampaignType(request.campaignType());

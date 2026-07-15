@@ -33,6 +33,11 @@ public class DataSeeder implements CommandLineRunner {
 
     @Value("${donorly.bootstrap.enabled:true}")
     private boolean bootstrapEnabled;
+    // Secure by default: demo accounts (known password) are NEVER created unless a
+    // deployment explicitly opts in. Kept separate from bootstrap.enabled so the real
+    // super-admin seed can run in production without also seeding demo logins.
+    @Value("${donorly.bootstrap.seed-demo:false}")
+    private boolean seedDemoEnabled;
     @Value("${donorly.bootstrap.super-admin-email:admin@donorly.org}")
     private String superAdminEmail;
     // No default on purpose: shipping a known password would be a critical hole.
@@ -53,7 +58,9 @@ public class DataSeeder implements CommandLineRunner {
         seedPermissions();
         seedRoles();
         seedDefaultOrganizationAndAdmin();
-        seedDemoUsers();
+        if (seedDemoEnabled) {
+            seedDemoUsers();
+        }
     }
 
     private void seedPermissions() {
@@ -200,9 +207,13 @@ public class DataSeeder implements CommandLineRunner {
 
         String password = superAdminPassword;
         if (password == null || password.isBlank()) {
+            // Never log a generated password (logs are retained and widely accessible).
+            // Generate a strong throwaway so the account cannot be logged into with a
+            // known value; recovery is via the forgot-password flow to the admin email.
             password = generatePassword();
-            log.warn("DONORLY_SUPERADMIN_PASSWORD is not set — generated a one-time password for {}: {} "
-                    + "(sign in and change it immediately)", superAdminEmail, password);
+            log.warn("DONORLY_SUPERADMIN_PASSWORD is not set. Created super admin {} with an "
+                    + "unrecoverable random password. Use the forgot-password flow to set one.",
+                    superAdminEmail);
         }
 
         User admin = new User();
@@ -237,8 +248,9 @@ public class DataSeeder implements CommandLineRunner {
 
     /**
      * Creates one demo account per role in the default organisation.
-     * Accounts are only created when the email does not yet exist, so this is safe
-     * to run on every startup.
+     * Only runs when {@code donorly.bootstrap.seed-demo=true} (OFF by default) so these
+     * known-password accounts are never created in production. Accounts are only created
+     * when the email does not yet exist, so this is safe to run on every startup.
      *
      * Credentials (all use password:  Demo1234!):
      *   owner@demo.donorly.org          — Organization Owner

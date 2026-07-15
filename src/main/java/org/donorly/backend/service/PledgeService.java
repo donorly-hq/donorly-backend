@@ -25,6 +25,9 @@ public class PledgeService {
     private final PledgeRepository pledgeRepository;
     private final CampaignRepository campaignRepository;
     private final DonorRepository donorRepository;
+    private final DonorLifetimeGivingService lifetimeGivingService;
+    private final DonorMatchingService donorMatchingService;
+    private final CampaignProgressService campaignProgressService;
     private final AuditService auditService;
 
     public List<Pledge> list() {
@@ -32,9 +35,7 @@ public class PledgeService {
     }
 
     public org.donorly.backend.dto.PageResponse<Pledge> page(int page, int size) {
-        var pageable = org.springframework.data.domain.PageRequest.of(
-                Math.max(page, 0), DonorService.clampSize(size),
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        var pageable = org.donorly.backend.common.PaginationHelper.newestFirst(page, size);
         return org.donorly.backend.dto.PageResponse.from(
                 pledgeRepository.findByOrganizationId(TenantContext.requireOrganizationId(), pageable));
     }
@@ -73,7 +74,7 @@ public class PledgeService {
         pledge.setEndDate(request.endDate());
         pledge.setSource(request.source());
         pledge.setNotes(request.notes());
-        pledge.setStatus("pending");
+        pledge.setStatus(org.donorly.backend.model.PledgeStatus.PENDING.value());
         pledge.setCreatedBy(TenantContext.getUserId());
 
         Pledge saved = pledgeRepository.save(pledge);
@@ -87,10 +88,11 @@ public class PledgeService {
         if (request.amount() != null) {
             pledge.setAmount(request.amount());
         }
-        if (request.collectedAmount() != null) {
-            pledge.setCollectedAmount(request.collectedAmount());
-        }
         if (request.status() != null) {
+            if (!org.donorly.backend.model.PledgeStatus.isValid(request.status())) {
+                throw new org.donorly.backend.common.BadRequestException(
+                        "Status must be one of: pending, active, fulfilled, cancelled");
+            }
             pledge.setStatus(request.status());
         }
         if (request.paymentMethod() != null) {
@@ -100,7 +102,7 @@ public class PledgeService {
             pledge.setNotes(request.notes());
         }
         Pledge saved = pledgeRepository.save(pledge);
-        recomputeDonorLifetimeGiving(pledge.getOrganizationId(), pledge.getDonorId());
+        lifetimeGivingService.recompute(pledge.getOrganizationId(), pledge.getDonorId());
         auditService.record("pledge.update", "pledge", saved.getId());
         return saved;
     }
@@ -109,7 +111,7 @@ public class PledgeService {
     public void delete(UUID id) {
         Pledge pledge = get(id);
         pledgeRepository.delete(pledge);
-        recomputeDonorLifetimeGiving(pledge.getOrganizationId(), pledge.getDonorId());
+        lifetimeGivingService.recompute(pledge.getOrganizationId(), pledge.getDonorId());
         auditService.record("pledge.delete", "pledge", id);
     }
 
@@ -128,7 +130,7 @@ public class PledgeService {
         String email = normalize(request.email());
         String phone = normalize(request.phone());
 
-        Donor donor = findExistingDonor(orgId, name, email, phone);
+        Donor donor = donorMatchingService.findExistingDonor(orgId, name, email, phone);
         boolean newDonor = donor == null;
         if (newDonor) {
             donor = new Donor();
@@ -147,7 +149,7 @@ public class PledgeService {
         pledge.setPaymentMethod(request.paymentMethod());
         pledge.setStartDate(java.time.LocalDate.now());
         pledge.setSource("live_event");
-        pledge.setStatus("pending");
+        pledge.setStatus(org.donorly.backend.model.PledgeStatus.PENDING.value());
         pledge.setCreatedBy(TenantContext.getUserId());
         Pledge saved = pledgeRepository.save(pledge);
 
@@ -162,9 +164,7 @@ public class PledgeService {
         var campaign = campaignRepository.findByIdAndOrganizationId(campaignId, orgId)
                 .orElseThrow(() -> new NotFoundException("Campaign not found"));
 
-        BigDecimal pledged = pledgeRepository.sumPledgedByCampaign(orgId, campaignId);
-        BigDecimal collected = pledgeRepository.sumCollectedByCampaign(orgId, campaignId);
-        int pledgeCount = pledgeRepository.findByOrganizationIdAndCampaignId(orgId, campaignId).size();
+        var progress = campaignProgressService.progress(orgId, campaignId);
 
         var recent = pledgeRepository.findTop10ByOrganizationIdAndCampaignIdOrderByCreatedAtDesc(orgId, campaignId);
         var donorNames = donorRepository.findAllById(
@@ -180,45 +180,13 @@ public class PledgeService {
 
         return new org.donorly.backend.dto.CampaignLiveResponse(
                 campaign.getId(), campaign.getName(), campaign.getGoalAmount(),
-                pledged != null ? pledged : BigDecimal.ZERO,
-                collected != null ? collected : BigDecimal.ZERO,
-                pledgeCount, recentDtos);
-    }
-
-    private Donor findExistingDonor(UUID orgId, String name, String email, String phone) {
-        List<Donor> candidates = donorRepository.findByOrganizationIdAndDeletedAtIsNull(orgId);
-        if (email != null) {
-            for (Donor d : candidates) {
-                if (d.getEmail() != null && d.getEmail().equalsIgnoreCase(email)) {
-                    return d;
-                }
-            }
-        }
-        String nameKey = DonorImportService.normalizeName(name);
-        String phoneKey = DonorImportService.normalizePhone(phone);
-        for (Donor d : candidates) {
-            if (DonorImportService.normalizeName(d.getFullName()).equals(nameKey)
-                    && DonorImportService.normalizePhone(d.getPhone()).equals(phoneKey)) {
-                return d;
-            }
-        }
-        return null;
+                progress.pledged(), progress.collected(),
+                progress.pledgeCount(), recentDtos);
     }
 
     private static String normalize(String value) {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private void recomputeDonorLifetimeGiving(UUID orgId, UUID donorId) {
-        BigDecimal collected = pledgeRepository.findByOrganizationIdAndDonorId(orgId, donorId).stream()
-                .map(Pledge::getCollectedAmount)
-                .filter(v -> v != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        donorRepository.findByIdAndOrganizationId(donorId, orgId).ifPresent(donor -> {
-            donor.setLifetimeGiving(collected);
-            donorRepository.save(donor);
-        });
     }
 }

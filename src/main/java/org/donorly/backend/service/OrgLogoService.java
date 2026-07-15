@@ -88,12 +88,24 @@ public class OrgLogoService {
         return isExternalHttpUrl(org.getLogoUrl()) ? org.getLogoUrl() : null;
     }
 
+    /** ~2 MB decoded. Checked against the base64 length BEFORE decoding to avoid an allocation bomb. */
+    private static final int MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
     @Transactional
     public void saveFromDataUrl(UUID orgId, String dataUrl) {
         if (dataUrl == null || dataUrl.isBlank()) return;
 
+        // Base64 inflates by 4/3, so cap the encoded string first: a multi-hundred-MB
+        // payload must be rejected before Base64.decode materializes it on the heap.
+        if (dataUrl.length() > MAX_LOGO_BYTES * 4L / 3 + 64) {
+            throw new IllegalArgumentException("Logo image is too large (max 2 MB)");
+        }
+
         LogoPayload payload = decodeDataUrl(dataUrl)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid logo image data"));
+        if (payload.bytes().length > MAX_LOGO_BYTES) {
+            throw new IllegalArgumentException("Logo image is too large (max 2 MB)");
+        }
 
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new IllegalStateException("Organization not found"));

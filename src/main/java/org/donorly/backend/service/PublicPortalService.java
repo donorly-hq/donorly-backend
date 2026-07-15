@@ -14,6 +14,7 @@ import org.donorly.backend.model.Event;
 import org.donorly.backend.model.EventRegistration;
 import org.donorly.backend.model.Organization;
 import org.donorly.backend.model.Pledge;
+import org.donorly.backend.model.PledgeStatus;
 import org.donorly.backend.repository.AuditLogRepository;
 import org.donorly.backend.repository.CampaignRepository;
 import org.donorly.backend.repository.DonorRepository;
@@ -47,6 +48,8 @@ public class PublicPortalService {
     private final EventRegistrationRepository registrationRepository;
     private final AuditLogRepository auditLogRepository;
     private final LoginRateLimiter rateLimiter;
+    private final DonorMatchingService donorMatchingService;
+    private final CampaignProgressService campaignProgressService;
 
     private static final BigDecimal SELF_PLEDGE_MAX = new BigDecimal("100000");
 
@@ -57,9 +60,7 @@ public class PublicPortalService {
         Organization org = organizationRepository.findById(campaign.getOrganizationId())
                 .orElseThrow(() -> new NotFoundException("Organization not found"));
 
-        BigDecimal pledged = pledgeRepository.sumPledgedByCampaign(org.getId(), campaign.getId());
-        BigDecimal collected = pledgeRepository.sumCollectedByCampaign(org.getId(), campaign.getId());
-        int count = pledgeRepository.findByOrganizationIdAndCampaignId(org.getId(), campaign.getId()).size();
+        var progress = campaignProgressService.progress(org.getId(), campaign.getId());
 
         var recent = pledgeRepository
                 .findTop10ByOrganizationIdAndCampaignIdOrderByCreatedAtDesc(org.getId(), campaign.getId());
@@ -76,9 +77,8 @@ public class PublicPortalService {
 
         return new PublicThermometerResponse(
                 org.getName(), campaign.getName(), campaign.getGoalAmount(),
-                pledged != null ? pledged : BigDecimal.ZERO,
-                collected != null ? collected : BigDecimal.ZERO,
-                count, recentDtos);
+                progress.pledged(), progress.collected(),
+                progress.pledgeCount(), recentDtos);
     }
 
     /**
@@ -112,7 +112,7 @@ public class PublicPortalService {
         String email = blankToNull(request.email());
         String phone = blankToNull(request.phone());
 
-        Donor donor = findExistingDonor(org.getId(), name, email, phone);
+        Donor donor = donorMatchingService.findExistingDonor(org.getId(), name, email, phone);
         if (donor == null) {
             donor = new Donor();
             donor.setOrganizationId(org.getId());
@@ -129,7 +129,7 @@ public class PublicPortalService {
         pledge.setAmount(request.amount());
         pledge.setStartDate(java.time.LocalDate.now());
         pledge.setSource("self");
-        pledge.setStatus("pending");
+        pledge.setStatus(PledgeStatus.PENDING.value());
         Pledge saved = pledgeRepository.save(pledge);
 
         AuditLog log = new AuditLog();
@@ -143,34 +143,14 @@ public class PublicPortalService {
                 donor.getFullName(), saved.getAmount(), campaign.getName(), org.getName());
     }
 
-    /** Same matching rules as staff quick-entry: email first, then normalized name+phone. */
-    private Donor findExistingDonor(UUID orgId, String name, String email, String phone) {
-        var candidates = donorRepository.findByOrganizationIdAndDeletedAtIsNull(orgId);
-        if (email != null) {
-            for (Donor d : candidates) {
-                if (d.getEmail() != null && d.getEmail().equalsIgnoreCase(email)) {
-                    return d;
-                }
-            }
-        }
-        String nameKey = DonorImportService.normalizeName(name);
-        String phoneKey = DonorImportService.normalizePhone(phone);
-        for (Donor d : candidates) {
-            if (DonorImportService.normalizeName(d.getFullName()).equals(nameKey)
-                    && DonorImportService.normalizePhone(d.getPhone()).equals(phoneKey)) {
-                return d;
-            }
-        }
-        return null;
-    }
-
     private static String blankToNull(String value) {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    public PublicCheckinInfo checkinInfo(UUID eventId, String code) {
+    public PublicCheckinInfo checkinInfo(UUID eventId, String code, String clientIp) {
+        checkCheckinRate(clientIp);
         EventRegistration reg = findRegistration(eventId, code);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
@@ -178,7 +158,8 @@ public class PublicPortalService {
     }
 
     @Transactional
-    public PublicCheckinInfo selfCheckIn(UUID eventId, String code) {
+    public PublicCheckinInfo selfCheckIn(UUID eventId, String code, String clientIp) {
+        checkCheckinRate(clientIp);
         EventRegistration reg = findRegistration(eventId, code);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
@@ -200,6 +181,18 @@ public class PublicPortalService {
             auditLogRepository.save(log);
         }
         return toInfo(event, reg);
+    }
+
+    /**
+     * Check-in codes are 8-char capabilities; throttle per client IP so they cannot be
+     * brute-forced. Keyed per minute like self-pledge, so a busy kiosk recovers quickly.
+     */
+    private void checkCheckinRate(String clientIp) {
+        String limiterKey = "checkin:" + clientIp + ":" + (Instant.now().getEpochSecond() / 60);
+        if (rateLimiter.isBlocked(limiterKey)) {
+            throw new BadRequestException("Too many attempts from this connection — please wait a minute.");
+        }
+        rateLimiter.recordFailure(limiterKey);
     }
 
     private EventRegistration findRegistration(UUID eventId, String code) {

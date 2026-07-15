@@ -100,7 +100,10 @@ public class AuthService {
 
     /** Finishes a multi-org login: the user picked one of their organizations. */
     @Transactional
-    public LoginResponse selectOrganization(String challengeId, UUID organizationId) {
+    public LoginResponse selectOrganization(String challengeId, UUID organizationId, String clientIp) {
+        // Challenge IDs are unauthenticated capabilities; throttle guessing per client.
+        String limiterKey = "select-org:" + clientIp;
+        checkChallengeRate(limiterKey);
         AuthToken challenge = authTokenRepository
                 .findByTokenAndPurpose(challengeId, AuthToken.PURPOSE_ORG_SELECT)
                 .orElseThrow(() -> new BadRequestException("Sign-in expired. Please sign in again."));
@@ -120,6 +123,7 @@ public class AuthService {
         challenge.setUsedAt(Instant.now());
         authTokenRepository.save(challenge);
 
+        rateLimiter.reset(limiterKey);
         return completeLogin(user, ctx);
     }
 
@@ -155,7 +159,9 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponse verifyOtp(String challengeId, String code) {
+    public LoginResponse verifyOtp(String challengeId, String code, String clientIp) {
+        String limiterKey = "verify-otp:" + clientIp;
+        checkChallengeRate(limiterKey);
         AuthToken challenge = authTokenRepository
                 .findByTokenAndPurpose(challengeId, AuthToken.PURPOSE_LOGIN_OTP)
                 .orElseThrow(() -> new BadRequestException("Invalid or expired code"));
@@ -170,7 +176,8 @@ public class AuthService {
         challenge.setAttempts(challenge.getAttempts() + 1);
         authTokenRepository.save(challenge);
 
-        if (!challenge.getCode().equals(code.trim())) {
+        // OTP codes are stored hashed; hash the submitted value and compare digests.
+        if (!hashOtp(code.trim()).equals(challenge.getCode())) {
             throw new BadRequestException("Incorrect code");
         }
 
@@ -184,6 +191,7 @@ public class AuthService {
         }
 
         ResolvedContext ctx = resolveContext(user, challenge.getContext());
+        rateLimiter.reset(limiterKey);
         return completeLogin(user, ctx);
     }
 
@@ -217,11 +225,13 @@ public class AuthService {
                 <p><a href="%s">Reset my password</a></p>
                 <p>If you didn't request this, you can safely ignore this email — your password is unchanged.</p>
                 """.formatted(user.getFullName(), link));
-        log.info("Password reset link issued for {}", user.getEmail());
+        log.info("Password reset link issued for user {}", user.getId());
     }
 
     @Transactional
-    public void resetPassword(String tokenValue, String newPassword) {
+    public void resetPassword(String tokenValue, String newPassword, String clientIp) {
+        String limiterKey = "reset-password:" + clientIp;
+        checkChallengeRate(limiterKey);
         AuthToken token = authTokenRepository
                 .findByTokenAndPurpose(tokenValue, AuthToken.PURPOSE_PASSWORD_RESET)
                 .orElseThrow(() -> new BadRequestException("Reset link is invalid or has expired"));
@@ -241,7 +251,8 @@ public class AuthService {
 
         // Force re-login everywhere with the new password
         sessionRepository.deleteByUserId(user.getId());
-        log.info("Password reset completed for {}", user.getEmail());
+        rateLimiter.reset(limiterKey);
+        log.info("Password reset completed for user {}", user.getId());
     }
 
     /** Refreshes org branding and role info for the current JWT context. */
@@ -324,11 +335,21 @@ public class AuthService {
     }
 
     private List<OrgChoice> orgChoices(List<OrganizationMembership> memberships) {
+        // Batch-load orgs and roles (2 queries) instead of 2 findById calls per membership.
+        var orgsById = new java.util.HashMap<UUID, Organization>();
+        organizationRepository.findAllById(
+                        memberships.stream().map(OrganizationMembership::getOrganizationId).toList())
+                .forEach(o -> orgsById.put(o.getId(), o));
+        var rolesById = new java.util.HashMap<UUID, Role>();
+        roleRepository.findAllById(
+                        memberships.stream().map(OrganizationMembership::getRoleId).toList())
+                .forEach(r -> rolesById.put(r.getId(), r));
+
         return memberships.stream()
                 .map(m -> {
-                    Organization org = organizationRepository.findById(m.getOrganizationId()).orElse(null);
+                    Organization org = orgsById.get(m.getOrganizationId());
                     if (org == null) return null;
-                    Role role = roleRepository.findById(m.getRoleId()).orElse(null);
+                    Role role = rolesById.get(m.getRoleId());
                     return new OrgChoice(
                             org.getId(),
                             org.getName(),
@@ -376,11 +397,14 @@ public class AuthService {
     }
 
     private LoginResponse startOtpChallenge(User user, String organizationSlug) {
+        String rawCode = randomOtpCode();
+
         AuthToken challenge = new AuthToken();
         challenge.setUserId(user.getId());
         challenge.setToken(randomToken());
         challenge.setPurpose(AuthToken.PURPOSE_LOGIN_OTP);
-        challenge.setCode(randomOtpCode());
+        // Store only the hash: a DB leak/backup must not expose live sign-in codes.
+        challenge.setCode(hashOtp(rawCode));
         challenge.setContext(organizationSlug);
         challenge.setExpiresAt(Instant.now().plus(OTP_TTL));
         authTokenRepository.save(challenge);
@@ -390,8 +414,8 @@ public class AuthService {
                 <p>Your one-time sign-in code is:</p>
                 <p style="font-size:28px;font-weight:bold;letter-spacing:6px">%s</p>
                 <p>It expires in 10 minutes. If you didn't try to sign in, change your password immediately.</p>
-                """.formatted(user.getFullName(), challenge.getCode()));
-        log.info("Login OTP issued for platform admin {}", user.getEmail());
+                """.formatted(user.getFullName(), rawCode));
+        log.info("Login OTP issued for platform admin (user {})", user.getId());
 
         return LoginResponse.otpChallenge(challenge.getToken());
     }
@@ -463,6 +487,29 @@ public class AuthService {
 
     private String randomOtpCode() {
         return String.format("%06d", RANDOM.nextInt(1_000_000));
+    }
+
+    /**
+     * SHA-256 is sufficient here (vs bcrypt) because codes expire in 10 minutes and
+     * guessing is capped by the attempt counter and the per-IP limiter.
+     */
+    private static String hashOtp(String rawCode) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawCode.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
+    /** Shared throttle for unauthenticated challenge/token endpoints, keyed by client IP. */
+    private void checkChallengeRate(String limiterKey) {
+        if (rateLimiter.isBlocked(limiterKey)) {
+            throw new BadRequestException("Too many attempts. Try again in "
+                    + rateLimiter.minutesUntilUnblocked(limiterKey) + " minute(s).");
+        }
+        rateLimiter.recordFailure(limiterKey);
     }
 
     private record SessionInfo(

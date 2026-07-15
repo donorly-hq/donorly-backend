@@ -1,15 +1,16 @@
 package org.donorly.backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.donorly.backend.common.BadRequestException;
 import org.donorly.backend.common.NotFoundException;
 import org.donorly.backend.dto.TownhallRequest;
 import org.donorly.backend.model.Townhall;
+import org.donorly.backend.repository.OrganizationMembershipRepository;
 import org.donorly.backend.repository.TownhallRepository;
 import org.donorly.backend.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class TownhallService {
 
     private final TownhallRepository townhallRepository;
+    private final OrganizationMembershipRepository membershipRepository;
     private final AuditService auditService;
 
     public List<Townhall> list() {
@@ -57,6 +59,11 @@ public class TownhallService {
     }
 
     private void apply(Townhall townhall, TownhallRequest request) {
+        if (request.hostAmbassadorUserId() != null
+                && membershipRepository.findByOrganizationIdAndUserId(
+                        townhall.getOrganizationId(), request.hostAmbassadorUserId()).isEmpty()) {
+            throw new BadRequestException("Host ambassador is not a member of this organization");
+        }
         townhall.setPersonName(request.personName());
         townhall.setPhone(request.phone());
         townhall.setVenue(request.venue());
