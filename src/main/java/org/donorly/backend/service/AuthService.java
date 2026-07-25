@@ -232,8 +232,11 @@ public class AuthService {
     public void resetPassword(String tokenValue, String newPassword, String clientIp) {
         String limiterKey = "reset-password:" + clientIp;
         checkChallengeRate(limiterKey);
+        // account_setup tokens (first-time registration) complete through the same
+        // set-password page, so both purposes are honored here.
         AuthToken token = authTokenRepository
-                .findByTokenAndPurpose(tokenValue, AuthToken.PURPOSE_PASSWORD_RESET)
+                .findByTokenAndPurposeIn(tokenValue,
+                        List.of(AuthToken.PURPOSE_PASSWORD_RESET, AuthToken.PURPOSE_ACCOUNT_SETUP))
                 .orElseThrow(() -> new BadRequestException("Reset link is invalid or has expired"));
 
         if (token.getUsedAt() != null || token.getExpiresAt().isBefore(Instant.now())) {

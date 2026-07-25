@@ -9,6 +9,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.mail.internet.MimeMessage;
 
 /**
@@ -27,6 +28,17 @@ public class EmailService {
 
     @Value("${donorly.mail.from-name:Donorly}")
     private String fromName;
+
+    @Value("${spring.mail.username:}")
+    private String smtpUsername;
+
+    @PostConstruct
+    void warnIfUnconfigured() {
+        if (smtpUsername == null || smtpUsername.isBlank()) {
+            log.warn("SMTP credentials are not configured (MAIL_USERNAME/MAIL_PASSWORD). "
+                    + "All outgoing email — invitations, password resets, sign-in codes — WILL FAIL.");
+        }
+    }
 
     /** Send a plain-text email. */
     @Async

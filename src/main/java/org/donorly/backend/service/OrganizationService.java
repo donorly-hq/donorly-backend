@@ -11,11 +11,15 @@ import org.donorly.backend.dto.OrganizationSummary;
 import org.donorly.backend.dto.SetOwnerRequest;
 import org.donorly.backend.model.*;
 import org.donorly.backend.repository.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -25,14 +29,22 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrganizationService {
 
+    private static final Duration ACCOUNT_SETUP_TTL = Duration.ofDays(7);
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final OrganizationRepository organizationRepository;
     private final OrganizationSettingsRepository settingsRepository;
     private final UserRepository userRepository;
     private final OrganizationMembershipRepository membershipRepository;
     private final RoleRepository roleRepository;
     private final UserSessionRepository sessionRepository;
+    private final AuthTokenRepository authTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final OrgLogoService orgLogoService;
+    private final EmailService emailService;
+
+    @Value("${donorly.mail.app-base-url:http://localhost:3000}")
+    private String appBaseUrl;
 
     public List<OrganizationSummary> listAll() {
         return organizationRepository.findAll()
@@ -88,14 +100,8 @@ public class OrganizationService {
         }
 
         boolean hasOwner = request.ownerEmail() != null && !request.ownerEmail().isBlank();
-        if (hasOwner) {
-            if (request.ownerName() == null || request.ownerName().isBlank()) {
-                throw new BadRequestException("Owner name is required when creating with an owner account");
-            }
-            if (!userRepository.existsByEmailIgnoreCase(request.ownerEmail())
-                    && (request.ownerPassword() == null || request.ownerPassword().isBlank())) {
-                throw new BadRequestException("Owner password is required when creating a new owner account");
-            }
+        if (hasOwner && (request.ownerName() == null || request.ownerName().isBlank())) {
+            throw new BadRequestException("Owner name is required when creating with an owner account");
         }
 
         Organization org = new Organization();
@@ -118,7 +124,7 @@ public class OrganizationService {
 
         User owner = null;
         if (hasOwner) {
-            owner = assignOwnerUser(org.getId(), request.ownerEmail(), request.ownerName(), request.ownerPassword());
+            owner = assignOwnerUser(org.getId(), request.ownerEmail(), request.ownerName());
         }
 
         org = organizationRepository.findById(org.getId()).orElseThrow();
@@ -172,7 +178,7 @@ public class OrganizationService {
     @Transactional
     public OrganizationResponse setOwner(UUID orgId, SetOwnerRequest request) {
         Organization org = findActive(orgId);
-        User owner = assignOwnerUser(orgId, request.ownerEmail(), request.ownerName(), request.ownerPassword());
+        User owner = assignOwnerUser(orgId, request.ownerEmail(), request.ownerName());
         return toResponse(org, owner);
     }
 
@@ -218,9 +224,10 @@ public class OrganizationService {
 
     /**
      * Ensures {@code email} holds the organization_owner role for {@code orgId}.
-     * Creates the user when needed; links existing users without requiring a password.
+     * Links existing users directly; brand-new accounts are created without a usable
+     * password and receive a registration email with a set-password link.
      */
-    private User assignOwnerUser(UUID orgId, String ownerEmail, String ownerName, String ownerPassword) {
+    private User assignOwnerUser(UUID orgId, String ownerEmail, String ownerName) {
         String email = ownerEmail.trim().toLowerCase(Locale.ROOT);
         Role ownerRole = requireRole("organization_owner");
 
@@ -261,16 +268,15 @@ public class OrganizationService {
         if (ownerName == null || ownerName.isBlank()) {
             throw new BadRequestException("Owner name is required when creating a new owner account");
         }
-        if (ownerPassword == null || ownerPassword.isBlank()) {
-            throw new BadRequestException("Password is required when creating a new owner account");
-        }
 
         demotePreviousOwners(orgId, null);
 
         User created = new User();
         created.setFullName(ownerName.trim());
         created.setEmail(email);
-        created.setPasswordHash(passwordEncoder.encode(ownerPassword));
+        // Unknowable placeholder — the real password is chosen by the owner via the
+        // emailed set-password link (or later through the forgot-password flow).
+        created.setPasswordHash(passwordEncoder.encode(randomSecret()));
         created.setStatus("active");
         created.setPlatformAdmin(false);
         created = userRepository.save(created);
@@ -282,7 +288,50 @@ public class OrganizationService {
         membership.setStatus(MembershipStatus.ACTIVE.value());
         membershipRepository.save(membership);
 
+        sendAccountSetupEmail(created, orgId);
+
         return created;
+    }
+
+    /** Emails a new account a single-use link to choose their password (registration). */
+    private void sendAccountSetupEmail(User user, UUID orgId) {
+        authTokenRepository.deleteByUserIdAndPurpose(user.getId(), AuthToken.PURPOSE_ACCOUNT_SETUP);
+
+        AuthToken token = new AuthToken();
+        token.setUserId(user.getId());
+        token.setToken(randomSecret());
+        token.setPurpose(AuthToken.PURPOSE_ACCOUNT_SETUP);
+        token.setExpiresAt(Instant.now().plus(ACCOUNT_SETUP_TTL));
+        authTokenRepository.save(token);
+
+        String orgName = organizationRepository.findById(orgId)
+                .map(Organization::getName).orElse("Donorly");
+        String link = appBaseUrl + "/reset-password/" + token.getToken();
+        emailService.sendHtml(user.getEmail(), "Welcome to Donorly — set your password", """
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family:sans-serif;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px">
+                  <h2 style="color:#2563eb">Welcome to Donorly</h2>
+                  <p>Hi %s,</p>
+                  <p>An account has been created for you as the owner of <strong>%s</strong>.
+                     Set your password to complete your registration and sign in.</p>
+                  <p style="margin:32px 0">
+                    <a href="%s"
+                       style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">
+                      Set My Password
+                    </a>
+                  </p>
+                  <p style="font-size:13px;color:#6b7280">This link expires in 7 days. If it expires, use
+                     "Forgot password" on the sign-in page to get a new one.</p>
+                </body>
+                </html>
+                """.formatted(user.getFullName(), orgName, link));
+    }
+
+    private static String randomSecret() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     /** Demotes every other organization_owner in this org to organization_admin. */

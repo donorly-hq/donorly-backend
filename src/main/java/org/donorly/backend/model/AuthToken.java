@@ -22,6 +22,8 @@ public class AuthToken {
     public static final String PURPOSE_PASSWORD_RESET = "password_reset";
     public static final String PURPOSE_LOGIN_OTP = "login_otp";
     public static final String PURPOSE_ORG_SELECT = "org_select";
+    /** First-time registration: a new account sets its initial password via emailed link. */
+    public static final String PURPOSE_ACCOUNT_SETUP = "account_setup";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
