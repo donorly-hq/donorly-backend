@@ -67,17 +67,46 @@ class OwnerRegistrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void existingUserLinkedAsOwnerGetsNoSetupToken() {
+    void existingActiveUserLinkedAsOwnerGetsNoSetupToken() {
         Organization org = createOrg("Existing Owner Org");
         TestActor existing = createActor(createOrg("Home Org"), "organization_admin");
+        // Simulate a real user who has signed in before — they know their password.
+        User user = existing.user();
+        user.setLastLoginAt(java.time.Instant.now());
+        userRepository.save(user);
 
         organizationService.setOwner(org.getId(),
-                new SetOwnerRequest("Renamed Owner", existing.user().getEmail()));
+                new SetOwnerRequest("Renamed Owner", user.getEmail()));
 
         List<AuthToken> setupTokens = authTokenRepository.findAll().stream()
-                .filter(t -> t.getUserId().equals(existing.user().getId())
+                .filter(t -> t.getUserId().equals(user.getId())
                         && AuthToken.PURPOSE_ACCOUNT_SETUP.equals(t.getPurpose()))
                 .toList();
-        assertTrue(setupTokens.isEmpty(), "existing accounts already have a password; no setup email");
+        assertTrue(setupTokens.isEmpty(), "accounts that have signed in keep their password; no setup email");
+    }
+
+    @Test
+    void existingUserWhoNeverLoggedInStillGetsSetupToken() {
+        Organization org = createOrg("Dormant Owner Org");
+        // An account created by an admin (e.g. via the old flow) that was never used.
+        TestActor dormant = createActor(createOrg("Dormant Home Org"), "organization_admin");
+
+        organizationService.setOwner(org.getId(),
+                new SetOwnerRequest("Dormant Owner", dormant.user().getEmail()));
+
+        List<AuthToken> setupTokens = authTokenRepository.findAll().stream()
+                .filter(t -> t.getUserId().equals(dormant.user().getId())
+                        && AuthToken.PURPOSE_ACCOUNT_SETUP.equals(t.getPurpose()))
+                .toList();
+        assertEquals(1, setupTokens.size(), "never-logged-in accounts need the set-password email");
+
+        // Re-assigning the same owner re-issues the token (email resend path).
+        organizationService.setOwner(org.getId(),
+                new SetOwnerRequest("Dormant Owner", dormant.user().getEmail()));
+        long tokenCount = authTokenRepository.findAll().stream()
+                .filter(t -> t.getUserId().equals(dormant.user().getId())
+                        && AuthToken.PURPOSE_ACCOUNT_SETUP.equals(t.getPurpose()))
+                .count();
+        assertEquals(1, tokenCount, "old setup tokens are replaced, not accumulated");
     }
 }

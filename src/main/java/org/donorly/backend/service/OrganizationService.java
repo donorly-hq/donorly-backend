@@ -243,24 +243,32 @@ public class OrganizationService {
                     .findByOrganizationIdAndUserId(orgId, user.getId())
                     .orElse(null);
 
-            if (membership != null && membership.getRoleId().equals(ownerRole.getId())
-                    && MembershipStatus.ACTIVE.matches(membership.getStatus())) {
-                return user;
+            boolean alreadyOwner = membership != null && membership.getRoleId().equals(ownerRole.getId())
+                    && MembershipStatus.ACTIVE.matches(membership.getStatus());
+
+            if (!alreadyOwner) {
+                demotePreviousOwners(orgId, user.getId());
+
+                if (membership != null) {
+                    membership.setRoleId(ownerRole.getId());
+                    membership.setStatus(MembershipStatus.ACTIVE.value());
+                    membershipRepository.save(membership);
+                } else {
+                    OrganizationMembership created = new OrganizationMembership();
+                    created.setOrganizationId(orgId);
+                    created.setUserId(user.getId());
+                    created.setRoleId(ownerRole.getId());
+                    created.setStatus(MembershipStatus.ACTIVE.value());
+                    membershipRepository.save(created);
+                }
             }
 
-            demotePreviousOwners(orgId, user.getId());
-
-            if (membership != null) {
-                membership.setRoleId(ownerRole.getId());
-                membership.setStatus(MembershipStatus.ACTIVE.value());
-                membershipRepository.save(membership);
-            } else {
-                OrganizationMembership created = new OrganizationMembership();
-                created.setOrganizationId(orgId);
-                created.setUserId(user.getId());
-                created.setRoleId(ownerRole.getId());
-                created.setStatus(MembershipStatus.ACTIVE.value());
-                membershipRepository.save(created);
+            // Accounts created by an admin that were never signed into don't have a
+            // usable password from the owner's perspective — send the set-password
+            // email so they can complete registration. Runs even when the membership
+            // is unchanged, so re-assigning the owner re-sends the email.
+            if (user.getLastLoginAt() == null) {
+                sendAccountSetupEmail(user, orgId);
             }
             return user;
         }
