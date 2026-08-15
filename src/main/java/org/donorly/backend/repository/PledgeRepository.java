@@ -62,5 +62,41 @@ public interface PledgeRepository extends JpaRepository<Pledge, UUID> {
     List<Pledge> findDueForReminder(@Param("minAge") java.time.Instant minAge,
                                     @Param("cutoff") java.time.Instant cutoff);
 
+    /** Org-scoped variant of {@link #findDueForReminder} for the suggested-reminders UI. */
+    @Query("""
+            select p from Pledge p
+            where p.organizationId = :orgId
+              and p.status in ('pending', 'active')
+              and p.collectedAmount < p.amount
+              and p.createdAt < :minAge
+              and (p.lastReminderAt is null or p.lastReminderAt < :cutoff)
+            order by p.createdAt asc
+            """)
+    List<Pledge> findDueForReminderByOrganization(@Param("orgId") UUID orgId,
+                                                  @Param("minAge") java.time.Instant minAge,
+                                                  @Param("cutoff") java.time.Instant cutoff);
+
     List<Pledge> findTop10ByOrganizationIdAndCampaignIdOrderByCreatedAtDesc(UUID organizationId, UUID campaignId);
+
+    /** Owed pledges that have gone quiet: older than {@code minAge} and not reminded since {@code cutoff}. */
+    @Query("""
+            select count(p) from Pledge p
+            where p.organizationId = :orgId
+              and p.status in ('pending', 'active')
+              and p.collectedAmount < p.amount
+              and p.createdAt < :minAge
+              and (p.lastReminderAt is null or p.lastReminderAt < :cutoff)
+            """)
+    long countStaleByOrganization(@Param("orgId") UUID orgId,
+                                  @Param("minAge") java.time.Instant minAge,
+                                  @Param("cutoff") java.time.Instant cutoff);
+
+    /** Pledges still owed money (pending/active with an uncollected balance). */
+    @Query("""
+            select count(p) from Pledge p
+            where p.organizationId = :orgId
+              and p.status in ('pending', 'active')
+              and p.collectedAmount < p.amount
+            """)
+    long countOutstandingByOrganization(@Param("orgId") UUID orgId);
 }

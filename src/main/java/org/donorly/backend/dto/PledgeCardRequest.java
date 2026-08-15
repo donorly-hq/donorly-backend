@@ -23,6 +23,7 @@ public record PledgeCardRequest(
 
         /* ── pledge card body ──────────────────────────────────── */
         String imageUrl,
+        String extractedJson,       // raw AI extraction, kept for the audit trail
         @NotNull @Positive BigDecimal amount,
         String paymentMethod,
         String notes

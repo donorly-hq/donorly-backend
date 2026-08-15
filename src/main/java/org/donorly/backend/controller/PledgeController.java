@@ -72,6 +72,13 @@ public class PledgeController {
         return pledgeService.liveProgress(campaignId);
     }
 
+    /** Pledges the reminder engine recommends nudging, with email previews for review. */
+    @GetMapping("/pledges/suggested-reminders")
+    @PreAuthorize("hasAuthority('pledges.read')")
+    public java.util.List<org.donorly.backend.dto.SuggestedReminderResponse> suggestedReminders() {
+        return reminderService.suggestedReminders();
+    }
+
     /** Manual pledge reminder email, triggered from the UI. */
     @PostMapping("/pledges/{id}/remind")
     @PreAuthorize("hasAuthority('pledges.write')")

@@ -2,6 +2,7 @@ package org.donorly.backend.service;
 
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.OrgUsageMetrics;
+import org.donorly.backend.dto.PlatformOrgOverview;
 import org.donorly.backend.model.Organization;
 import org.donorly.backend.repository.AuditLogRepository;
 import org.donorly.backend.repository.CampaignRepository;
@@ -25,6 +26,42 @@ public class PlatformMetricsService {
     private final CampaignRepository campaignRepository;
     private final PledgeRepository pledgeRepository;
     private final AuditLogRepository auditLogRepository;
+    private final SetupProgressService setupProgressService;
+
+    /**
+     * Tile per tenant for the platform dashboard: identity + setup percent +
+     * fundraising totals. SetupProgressService takes an explicit orgId, which
+     * is what lets a platform-scoped request (no TenantContext org) reuse the
+     * same checklist logic as the tenant dashboard.
+     */
+    public List<PlatformOrgOverview> platformOverview() {
+        return organizationRepository.findAll().stream()
+                .filter(o -> o.getDeletedAt() == null)
+                .map(this::overviewFor)
+                .toList();
+    }
+
+    private PlatformOrgOverview overviewFor(Organization org) {
+        UUID orgId = org.getId();
+        boolean hasLogo = (org.getLogoData() != null && !org.getLogoData().isBlank())
+                || (org.getLogoUrl() != null && !org.getLogoUrl().isBlank());
+        return new PlatformOrgOverview(
+                orgId,
+                org.getName(),
+                org.getSlug(),
+                org.getVertical(),
+                org.getStatus(),
+                org.getPrimaryColor(),
+                hasLogo,
+                setupProgressService.progressFor(orgId).percent(),
+                membershipRepository.countByOrganizationIdAndStatus(orgId, "active"),
+                donorRepository.countByOrganizationIdAndDeletedAtIsNull(orgId),
+                campaignRepository.countByOrganizationIdAndStatus(orgId, "active"),
+                campaignRepository.sumActiveGoalByOrganization(orgId),
+                pledgeRepository.sumPledgedByOrganization(orgId),
+                pledgeRepository.sumCollectedByOrganization(orgId)
+        );
+    }
 
     public List<OrgUsageMetrics> listUsageMetrics() {
         return organizationRepository.findAll().stream()

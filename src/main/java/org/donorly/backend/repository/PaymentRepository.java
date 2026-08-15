@@ -14,4 +14,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByOrganizationIdAndDonorIdOrderByCreatedAtDesc(UUID organizationId, UUID donorId);
     List<Payment> findByOrganizationIdAndPledgeIdOrderByCreatedAtDesc(UUID organizationId, UUID pledgeId);
     Optional<Payment> findByIdAndOrganizationId(UUID id, UUID organizationId);
+    long countByOrganizationId(UUID organizationId);
+    List<Payment> findTop5ByOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
 }

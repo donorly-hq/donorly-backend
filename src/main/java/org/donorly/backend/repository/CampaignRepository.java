@@ -14,4 +14,10 @@ public interface CampaignRepository extends JpaRepository<Campaign, UUID> {
     Optional<Campaign> findByIdAndOrganizationId(UUID id, UUID organizationId);
     boolean existsByOrganizationIdAndSlug(UUID organizationId, String slug);
     long countByOrganizationIdAndStatus(UUID organizationId, String status);
+
+    @org.springframework.data.jpa.repository.Query(
+            "select coalesce(sum(c.goalAmount), 0) from Campaign c "
+            + "where c.organizationId = :orgId and c.status = 'active'")
+    java.math.BigDecimal sumActiveGoalByOrganization(
+            @org.springframework.data.repository.query.Param("orgId") UUID orgId);
 }

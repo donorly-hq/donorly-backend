@@ -41,6 +41,12 @@ public class OrganizationController {
         return platformMetricsService.listUsageMetrics();
     }
 
+    /** Tile data for the platform dashboard: setup percent + thermometer per org. */
+    @GetMapping("/overview")
+    public List<org.donorly.backend.dto.PlatformOrgOverview> overview() {
+        return platformMetricsService.platformOverview();
+    }
+
     @GetMapping("/{id}")
     public OrganizationResponse get(@PathVariable UUID id) {
         return organizationService.getById(id);

@@ -69,33 +69,80 @@ public class AiGateway {
                     "max_tokens", 600,
                     "temperature", 0.4
             );
-
-            String bodyJson = objectMapper.writeValueAsString(body);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(OPENAI_URL))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
-                    .build();
-
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                log.error("[AI] OpenAI returned HTTP {}: {}", response.statusCode(), response.body());
-                return "AI service returned an error (HTTP " + response.statusCode() + "). Please try again.";
-            }
-
-            OpenAiResponse parsed = objectMapper.readValue(response.body(), OpenAiResponse.class);
-            if (parsed.choices() == null || parsed.choices().isEmpty()) {
-                return "AI returned an empty response.";
-            }
-            return parsed.choices().get(0).message().content();
-
+            return send(body);
+        } catch (AiUnavailableException e) {
+            return e.getMessage();
         } catch (Exception e) {
             log.error("[AI] Error calling OpenAI API: {}", e.getMessage(), e);
             return "Unable to reach the AI service right now. Please try again.";
+        }
+    }
+
+    /**
+     * Send a prompt plus an image (as a base64 data URL) and force a strict-JSON reply
+     * via {@code response_format: json_object}.
+     *
+     * Unlike {@link #chat}, failures here throw {@link AiUnavailableException} instead of
+     * returning a friendly fallback string: the caller must parse the reply as JSON, so a
+     * prose fallback would only fail later in a more confusing way.
+     */
+    public String extractJsonFromImage(String systemPrompt, String userPrompt, String imageDataUrl) {
+        if (!isEnabled()) {
+            throw new AiUnavailableException("AI is not configured on this server (missing OpenAI API key).");
+        }
+        try {
+            Map<String, Object> body = Map.of(
+                    "model", model,
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemPrompt),
+                            Map.of("role", "user", "content", List.of(
+                                    Map.of("type", "text", "text", userPrompt),
+                                    Map.of("type", "image_url", "image_url",
+                                            Map.of("url", imageDataUrl, "detail", "high"))
+                            ))
+                    ),
+                    "max_tokens", 500,
+                    "temperature", 0,
+                    "response_format", Map.of("type", "json_object")
+            );
+            return send(body);
+        } catch (AiUnavailableException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[AI] Error calling OpenAI vision API: {}", e.getMessage(), e);
+            throw new AiUnavailableException("Unable to reach the AI service right now. Please try again.");
+        }
+    }
+
+    private String send(Map<String, Object> body) throws Exception {
+        String bodyJson = objectMapper.writeValueAsString(body);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(OPENAI_URL))
+                .timeout(TIMEOUT)
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
+                .build();
+
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            log.error("[AI] OpenAI returned HTTP {}: {}", response.statusCode(), response.body());
+            throw new AiUnavailableException("AI service returned an error (HTTP " + response.statusCode() + "). Please try again.");
+        }
+
+        OpenAiResponse parsed = objectMapper.readValue(response.body(), OpenAiResponse.class);
+        if (parsed.choices() == null || parsed.choices().isEmpty()) {
+            throw new AiUnavailableException("AI returned an empty response.");
+        }
+        return parsed.choices().get(0).message().content();
+    }
+
+    /** Thrown when the AI backend is unconfigured or unreachable. */
+    public static class AiUnavailableException extends RuntimeException {
+        public AiUnavailableException(String message) {
+            super(message);
         }
     }
 

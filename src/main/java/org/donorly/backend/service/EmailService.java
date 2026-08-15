@@ -32,6 +32,11 @@ public class EmailService {
     @Value("${spring.mail.username:}")
     private String smtpUsername;
 
+    /** True when SMTP credentials are configured; false in bare local dev. */
+    public boolean isConfigured() {
+        return smtpUsername != null && !smtpUsername.isBlank();
+    }
+
     @PostConstruct
     void warnIfUnconfigured() {
         if (smtpUsername == null || smtpUsername.isBlank()) {

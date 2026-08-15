@@ -86,6 +86,7 @@ public class PledgeCardService {
         card.setCampaignId(request.campaignId());
         card.setDonorId(donorId);
         card.setImageUrl(request.imageUrl());
+        card.setExtractedJson(request.extractedJson());
         card.setAmount(request.amount());
         card.setPaymentMethod(request.paymentMethod());
         card.setNotes(request.notes());

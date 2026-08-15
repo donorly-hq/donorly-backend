@@ -420,6 +420,14 @@ public class AuthService {
                 """.formatted(user.getFullName(), rawCode));
         log.info("Login OTP issued for platform admin (user {})", user.getId());
 
+        // Local-dev escape hatch: without SMTP the email above cannot be delivered,
+        // which would lock platform admins out entirely. Production always has mail
+        // credentials configured, so this never logs there.
+        if (!emailService.isConfigured()) {
+            log.warn("SMTP is not configured — sign-in code for {} (local dev only): {}",
+                    user.getEmail(), rawCode);
+        }
+
         return LoginResponse.otpChallenge(challenge.getToken());
     }
 

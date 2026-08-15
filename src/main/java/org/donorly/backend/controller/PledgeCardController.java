@@ -4,6 +4,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.donorly.backend.dto.PledgeCardRequest;
 import org.donorly.backend.dto.PledgeCardResponse;
+import org.donorly.backend.dto.PledgeCardScanRequest;
+import org.donorly.backend.dto.PledgeCardScanResponse;
+import org.donorly.backend.service.PledgeCardScanService;
 import org.donorly.backend.service.PledgeCardService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +22,7 @@ import java.util.UUID;
 public class PledgeCardController {
 
     private final PledgeCardService pledgeCardService;
+    private final PledgeCardScanService pledgeCardScanService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('pledges.read')")
@@ -42,6 +46,13 @@ public class PledgeCardController {
     @PreAuthorize("hasAuthority('pledges.write')")
     public ResponseEntity<PledgeCardResponse> create(@Valid @RequestBody PledgeCardRequest request) {
         return ResponseEntity.ok(pledgeCardService.create(request));
+    }
+
+    /** Photo of a paper pledge card in, AI-suggested field values out. Nothing is saved yet. */
+    @PostMapping("/scan")
+    @PreAuthorize("hasAuthority('pledges.write')")
+    public PledgeCardScanResponse scan(@Valid @RequestBody PledgeCardScanRequest request) {
+        return pledgeCardScanService.scan(request);
     }
 
     @PatchMapping("/{id}/status")

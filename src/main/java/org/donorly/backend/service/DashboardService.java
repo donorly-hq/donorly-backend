@@ -38,6 +38,7 @@ public class DashboardService {
     private final CampaignRepository campaignRepository;
     private final PledgeRepository pledgeRepository;
     private final FollowUpRepository followUpRepository;
+    private final org.donorly.backend.repository.PaymentRepository paymentRepository;
     private final EventRepository eventRepository;
     private final TownhallRepository townhallRepository;
     private final OrganizationMembershipRepository membershipRepository;
@@ -52,13 +53,58 @@ public class DashboardService {
         BigDecimal pledged = nz(pledgeRepository.sumPledgedByOrganization(orgId));
         BigDecimal collected = nz(pledgeRepository.sumCollectedByOrganization(orgId));
         long openFollowUps = followUpRepository.countByOrganizationIdAndStatus(orgId, "open");
+        long outstandingPledges = pledgeRepository.countOutstandingByOrganization(orgId);
+
+        // Thermometers: active campaigns, goal vs pledged/collected.
+        List<OrgDashboardResponse.CampaignProgress> campaigns = campaignRepository
+                .findByOrganizationIdAndStatusOrderByStartDateAsc(orgId, "active")
+                .stream()
+                .limit(6)
+                .map(c -> {
+                    var progress = campaignProgressService.progress(orgId, c.getId());
+                    return new OrgDashboardResponse.CampaignProgress(
+                            c.getId(), c.getName(), c.getStatus(), c.getGoalAmount(),
+                            progress.pledged(), progress.collected(), c.getEndDate());
+                })
+                .toList();
+
+        List<org.donorly.backend.model.Payment> payments =
+                paymentRepository.findTop5ByOrganizationIdOrderByCreatedAtDesc(orgId);
+        List<org.donorly.backend.model.FollowUp> followUps =
+                followUpRepository.findOpenByDueSoonest(orgId, org.springframework.data.domain.PageRequest.of(0, 5));
+
+        // One batched donor lookup for both feeds instead of a query per row (N+1).
+        var donorIds = new java.util.HashSet<UUID>();
+        payments.forEach(p -> donorIds.add(p.getDonorId()));
+        followUps.forEach(f -> donorIds.add(f.getDonorId()));
+        var donorNames = new java.util.HashMap<UUID, String>();
+        if (!donorIds.isEmpty()) {
+            donorRepository.findAllById(donorIds).forEach(d -> donorNames.put(d.getId(), d.getFullName()));
+        }
+
+        List<OrgDashboardResponse.RecentPayment> recentPayments = payments.stream()
+                .map(p -> new OrgDashboardResponse.RecentPayment(
+                        p.getId(), donorNames.getOrDefault(p.getDonorId(), "Donor"),
+                        p.getAmount(), p.getPaymentMethod(), p.getPaymentDate()))
+                .toList();
+
+        List<OrgDashboardResponse.DueFollowUp> dueFollowUps = followUps.stream()
+                .map(f -> new OrgDashboardResponse.DueFollowUp(
+                        f.getId(), f.getDonorId(), donorNames.getOrDefault(f.getDonorId(), "Donor"),
+                        f.getDueAt(), f.getNotes()))
+                .toList();
+
         return new OrgDashboardResponse(
                 totalDonors,
                 totalCampaigns,
                 pledged,
                 collected,
                 pledged.subtract(collected),
-                openFollowUps
+                openFollowUps,
+                outstandingPledges,
+                campaigns,
+                recentPayments,
+                dueFollowUps
         );
     }
 

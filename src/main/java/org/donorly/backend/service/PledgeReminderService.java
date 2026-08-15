@@ -54,6 +54,42 @@ public class PledgeReminderService {
     @Value("${donorly.reminders.grace-days:7}")
     private int graceDays;
 
+    /**
+     * Pledges the automatic sweep would remind about, surfaced for human review
+     * with the exact email that would be sent. Same criteria as the scheduler,
+     * scoped to the current org and to donors we can actually email.
+     */
+    @Transactional(readOnly = true)
+    public List<org.donorly.backend.dto.SuggestedReminderResponse> suggestedReminders() {
+        UUID orgId = TenantContext.requireOrganizationId();
+        Instant now = Instant.now();
+        List<Pledge> due = pledgeRepository.findDueForReminderByOrganization(
+                orgId,
+                now.minus(Duration.ofDays(graceDays)),
+                now.minus(Duration.ofDays(intervalDays)));
+
+        return due.stream()
+                .map(pledge -> {
+                    Donor donor = donorRepository.findById(pledge.getDonorId()).orElse(null);
+                    if (donor == null || donor.getDeletedAt() != null
+                            || donor.getEmail() == null || donor.getEmail().isBlank()) {
+                        return null;
+                    }
+                    Email email = buildEmail(pledge, donor);
+                    BigDecimal amount = nz(pledge.getAmount());
+                    BigDecimal collected = nz(pledge.getCollectedAmount());
+                    return new org.donorly.backend.dto.SuggestedReminderResponse(
+                            pledge.getId(), donor.getId(), donor.getFullName(), donor.getEmail(),
+                            campaignRepository.findById(pledge.getCampaignId())
+                                    .map(Campaign::getName).orElse("—"),
+                            amount, collected, amount.subtract(collected).max(BigDecimal.ZERO),
+                            pledge.getLastReminderAt(), pledge.getCreatedAt(),
+                            email.subject(), email.body());
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     /** Manual reminder for one pledge, triggered from the UI. */
     @Transactional
     public void sendReminder(UUID pledgeId) {
@@ -105,15 +141,18 @@ public class PledgeReminderService {
         log.info("Pledge reminder job: {} reminder(s) sent", sent);
     }
 
-    /** Builds the email, sends it, records it in message history, and stamps the pledge. */
-    private void deliver(Pledge pledge, Donor donor, UUID sentBy) {
+    record Email(String subject, String body) {
+    }
+
+    /** The exact reminder copy — shared by delivery and the review preview. */
+    private Email buildEmail(Pledge pledge, Donor donor) {
         String campaignName = campaignRepository.findById(pledge.getCampaignId())
                 .map(Campaign::getName).orElse("our campaign");
         String orgName = organizationRepository.findById(pledge.getOrganizationId())
                 .map(Organization::getName).orElse("Your organization");
 
-        BigDecimal amount = pledge.getAmount() != null ? pledge.getAmount() : BigDecimal.ZERO;
-        BigDecimal collected = pledge.getCollectedAmount() != null ? pledge.getCollectedAmount() : BigDecimal.ZERO;
+        BigDecimal amount = nz(pledge.getAmount());
+        BigDecimal collected = nz(pledge.getCollectedAmount());
         BigDecimal outstanding = amount.subtract(collected).max(BigDecimal.ZERO);
 
         String subject = "A friendly reminder about your pledge to " + orgName;
@@ -133,6 +172,18 @@ public class PledgeReminderService {
                 """.formatted(
                 donor.getFullName(), amount.toPlainString(), campaignName, orgName,
                 collected.toPlainString(), outstanding.toPlainString(), orgName);
+        return new Email(subject, body);
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** Builds the email, sends it, records it in message history, and stamps the pledge. */
+    private void deliver(Pledge pledge, Donor donor, UUID sentBy) {
+        Email email = buildEmail(pledge, donor);
+        String subject = email.subject();
+        String body = email.body();
 
         emailService.sendText(donor.getEmail(), subject, body);
 

@@ -17,6 +17,18 @@ public interface DonorRepository extends JpaRepository<Donor, UUID> {
     Optional<Donor> findByIdAndOrganizationId(UUID id, UUID organizationId);
     long countByOrganizationIdAndDeletedAtIsNull(UUID organizationId);
 
+    /** Past givers with no payment since {@code cutoff} — lapsed-donor signal. */
+    @Query("""
+            select count(d) from Donor d
+            where d.organizationId = :orgId and d.deletedAt is null
+              and d.lifetimeGiving > 0
+              and not exists (
+                  select 1 from Payment p
+                  where p.donorId = d.id and p.organizationId = :orgId and p.createdAt >= :cutoff
+              )
+            """)
+    long countDormantSince(@Param("orgId") UUID orgId, @Param("cutoff") java.time.Instant cutoff);
+
     @Query("""
             select d from Donor d
             where d.organizationId = :orgId and d.deletedAt is null
