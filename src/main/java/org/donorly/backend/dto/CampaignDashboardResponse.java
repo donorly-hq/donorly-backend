@@ -1,6 +1,7 @@
 package org.donorly.backend.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record CampaignDashboardResponse(
@@ -10,6 +11,11 @@ public record CampaignDashboardResponse(
         BigDecimal pledged,
         BigDecimal collected,
         BigDecimal remaining,
-        int pledgeCount
+        int pledgeCount,
+        String status,
+        LocalDate startDate,
+        LocalDate endDate,
+        Integer daysRemaining,   // null when no end date
+        int donorsTargeted
 ) {
 }

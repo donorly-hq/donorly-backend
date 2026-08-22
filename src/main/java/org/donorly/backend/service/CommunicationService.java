@@ -124,6 +124,10 @@ public class CommunicationService {
         if (result.success()) {
             saved.setStatus("sent");
             saved.setSentAt(Instant.now());
+            saved.setExternalId(result.externalId());
+        } else if (result.skipped()) {
+            saved.setStatus("skipped");
+            saved.setErrorMessage(result.errorMessage());
         } else {
             saved.setStatus("failed");
             saved.setErrorMessage(result.errorMessage());
@@ -174,13 +178,13 @@ public class CommunicationService {
         if (parsed == null) return null;
         return switch (parsed) {
             case EMAIL -> donor.getEmail();
-            case SMS -> donor.getPhone();
+            case SMS, WHATSAPP, ROBOCALL -> donor.getPhone();
         };
     }
 
     private void validateChannel(String channel) {
         if (!org.donorly.backend.model.CommunicationChannel.isValid(channel)) {
-            throw new BadRequestException("Channel must be email or sms");
+            throw new BadRequestException("Channel must be email, sms, whatsapp, or robocall");
         }
     }
 
@@ -211,6 +215,8 @@ public class CommunicationService {
                 message.getBody(),
                 message.getStatus(),
                 message.getErrorMessage(),
+                message.getDirection(),
+                message.getCampaignId(),
                 message.getSentAt(),
                 message.getCreatedAt()
         );

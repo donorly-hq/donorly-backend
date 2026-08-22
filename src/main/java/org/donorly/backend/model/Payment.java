@@ -21,8 +21,12 @@ public class Payment extends AuditableEntity {
     @Column(name = "organization_id", nullable = false)
     private UUID organizationId;
 
-    @Column(name = "pledge_id", nullable = false)
+    /** Nullable: "takaza" donations post straight to a campaign without a pledge. */
+    @Column(name = "pledge_id")
     private UUID pledgeId;
+
+    @Column(name = "campaign_id")
+    private UUID campaignId;
 
     @Column(name = "donor_id", nullable = false)
     private UUID donorId;

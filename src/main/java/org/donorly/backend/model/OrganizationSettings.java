@@ -27,4 +27,10 @@ public class OrganizationSettings extends AuditableEntity {
 
     @Column(name = "payment_enabled", nullable = false)
     private boolean paymentEnabled = false;
+
+    @Column(name = "pledge_card_auto_approve", nullable = false)
+    private boolean pledgeCardAutoApprove = true;
+
+    @Column(name = "pledge_card_auto_approve_hours", nullable = false)
+    private int pledgeCardAutoApproveHours = 24;
 }

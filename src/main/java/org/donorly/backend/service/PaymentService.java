@@ -33,6 +33,7 @@ public class PaymentService {
     private final ReceiptRepository receiptRepository;
     private final PledgeRepository pledgeRepository;
     private final DonorRepository donorRepository;
+    private final org.donorly.backend.repository.CampaignRepository campaignRepository;
     private final OrganizationSettingsRepository settingsRepository;
     private final ReceiptNumberService receiptNumberService;
     private final DonorLifetimeGivingService lifetimeGivingService;
@@ -68,6 +69,13 @@ public class PaymentService {
     @Transactional
     public PaymentResponse record(PaymentRequest request) {
         UUID orgId = TenantContext.requireOrganizationId();
+        if (request.pledgeId() != null) {
+            return recordPledgePayment(orgId, request);
+        }
+        return recordDirectPayment(orgId, request);
+    }
+
+    private PaymentResponse recordPledgePayment(UUID orgId, PaymentRequest request) {
         // Lock the pledge row for the duration of this transaction so concurrent
         // payments serialize and cannot overwrite each other's collectedAmount.
         Pledge pledge = pledgeRepository.findByIdAndOrganizationIdForUpdate(request.pledgeId(), orgId)
@@ -81,6 +89,7 @@ public class PaymentService {
         Payment payment = new Payment();
         payment.setOrganizationId(orgId);
         payment.setPledgeId(pledge.getId());
+        payment.setCampaignId(pledge.getCampaignId());
         payment.setDonorId(pledge.getDonorId());
         payment.setAmount(request.amount());
         payment.setPaymentMethod(request.paymentMethod());
@@ -101,7 +110,40 @@ public class PaymentService {
         lifetimeGivingService.recompute(orgId, pledge.getDonorId());
 
         Receipt receipt = null;
-        if (request.issueReceipt()) {
+        if (request.shouldIssueReceipt()) {
+            receipt = issueReceipt(payment);
+        }
+
+        auditService.record("payment.record", "payment", payment.getId());
+        return toResponse(payment, receipt);
+    }
+
+    /** Direct "takaza" donation: posts straight to a campaign with no pledge. */
+    private PaymentResponse recordDirectPayment(UUID orgId, PaymentRequest request) {
+        if (request.campaignId() == null || request.donorId() == null) {
+            throw new BadRequestException("Provide a pledgeId, or a campaignId and donorId for a direct donation");
+        }
+        campaignRepository.findByIdAndOrganizationId(request.campaignId(), orgId)
+                .orElseThrow(() -> new NotFoundException("Campaign not found"));
+        donorRepository.findByIdAndOrganizationId(request.donorId(), orgId)
+                .orElseThrow(() -> new NotFoundException("Donor not found"));
+
+        Payment payment = new Payment();
+        payment.setOrganizationId(orgId);
+        payment.setCampaignId(request.campaignId());
+        payment.setDonorId(request.donorId());
+        payment.setAmount(request.amount());
+        payment.setPaymentMethod(request.paymentMethod());
+        payment.setPaymentDate(request.paymentDate() != null ? request.paymentDate() : LocalDate.now());
+        payment.setReference(request.reference());
+        payment.setNotes(request.notes());
+        payment.setRecordedBy(TenantContext.getUserId());
+        payment = paymentRepository.save(payment);
+
+        lifetimeGivingService.recompute(orgId, request.donorId());
+
+        Receipt receipt = null;
+        if (request.shouldIssueReceipt()) {
             receipt = issueReceipt(payment);
         }
 
@@ -165,9 +207,31 @@ public class PaymentService {
         String donorName = donorRepository.findById(payment.getDonorId())
                 .map(Donor::getFullName)
                 .orElse(null);
+
+        // "Day N of M": payment date relative to the campaign timeline.
+        String campaignName = null;
+        Integer campaignDay = null;
+        Integer campaignDays = null;
+        if (payment.getCampaignId() != null) {
+            var campaign = campaignRepository.findById(payment.getCampaignId()).orElse(null);
+            if (campaign != null) {
+                campaignName = campaign.getName();
+                if (campaign.getStartDate() != null && payment.getPaymentDate() != null) {
+                    campaignDay = (int) java.time.temporal.ChronoUnit.DAYS.between(
+                            campaign.getStartDate(), payment.getPaymentDate()) + 1;
+                    if (campaign.getEndDate() != null) {
+                        campaignDays = (int) java.time.temporal.ChronoUnit.DAYS.between(
+                                campaign.getStartDate(), campaign.getEndDate()) + 1;
+                    }
+                }
+            }
+        }
+
         return new PaymentResponse(
                 payment.getId(),
                 payment.getPledgeId(),
+                payment.getCampaignId(),
+                campaignName,
                 payment.getDonorId(),
                 donorName,
                 payment.getAmount(),
@@ -177,6 +241,8 @@ public class PaymentService {
                 payment.getNotes(),
                 payment.getRecordedBy(),
                 payment.getCreatedAt(),
+                campaignDay,
+                campaignDays,
                 receipt != null ? toReceiptResponse(receipt) : null
         );
     }

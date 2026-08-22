@@ -7,13 +7,23 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * Either {@code pledgeId} (payment against a pledge) or {@code campaignId} +
+ * {@code donorId} (direct "takaza" donation with no pledge) must be provided.
+ */
 public record PaymentRequest(
-        @NotNull UUID pledgeId,
+        UUID pledgeId,
+        UUID campaignId,
+        UUID donorId,
         @NotNull @Positive BigDecimal amount,
         String paymentMethod,
         LocalDate paymentDate,
         String reference,
         String notes,
-        boolean issueReceipt
+        // Boxed so clients may omit the field (Jackson 3 rejects null -> primitive).
+        Boolean issueReceipt
 ) {
+    public boolean shouldIssueReceipt() {
+        return Boolean.TRUE.equals(issueReceipt);
+    }
 }

@@ -57,7 +57,7 @@ class FinancialConcurrencyTest extends IntegrationTestBase {
         Pledge pledge = createPledge(org, campaign, donor, new BigDecimal("1000"));
 
         runConcurrently(THREADS, () -> paymentService.record(new PaymentRequest(
-                pledge.getId(), new BigDecimal("10"), "cash", null, null, null, false)));
+                pledge.getId(), null, null, new BigDecimal("10"), "cash", null, null, null, false)));
 
         Pledge reloaded = pledgeRepository.findById(pledge.getId()).orElseThrow();
         assertThat(reloaded.getCollectedAmount())
@@ -82,7 +82,7 @@ class FinancialConcurrencyTest extends IntegrationTestBase {
                         start.await();
                         withTenant(() -> {
                             var response = paymentService.record(new PaymentRequest(
-                                    pledge.getId(), new BigDecimal("100"), "cash",
+                                    pledge.getId(), null, null, new BigDecimal("100"), "cash",
                                     null, null, null, true));
                             receiptNumbers.add(response.receipt().receiptNumber());
                         });
@@ -109,7 +109,7 @@ class FinancialConcurrencyTest extends IntegrationTestBase {
         Pledge pledge = createPledge(org, campaign, donor, new BigDecimal("50"));
         assertThrows(BadRequestException.class,
                 () -> withTenant(() -> paymentService.record(new PaymentRequest(
-                        pledge.getId(), new BigDecimal("60"), "cash", null, null, null, false))));
+                        pledge.getId(), null, null, new BigDecimal("60"), "cash", null, null, null, false))));
     }
 
     /** Runs the action concurrently on N threads, each with the tenant context set. */

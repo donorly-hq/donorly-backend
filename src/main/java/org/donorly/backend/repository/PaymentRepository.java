@@ -16,4 +16,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByIdAndOrganizationId(UUID id, UUID organizationId);
     long countByOrganizationId(UUID organizationId);
     List<Payment> findTop5ByOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
+    /** Webhook idempotency: Stripe session ids are stored in {@code reference}. */
+    boolean existsByOrganizationIdAndReference(UUID organizationId, String reference);
 }

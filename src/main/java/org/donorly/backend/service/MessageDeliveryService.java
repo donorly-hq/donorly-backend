@@ -10,14 +10,17 @@ import jakarta.mail.internet.MimeMessage;
 
 /**
  * Delivery adapter for the communications module.
- * Email goes out through SMTP (same account as invitation mail).
- * SMS is still a logging stub until an SMS provider (e.g. Twilio) is integrated.
+ * Email goes out through SMTP (same account as invitation mail); SMS, WhatsApp,
+ * and robocalls go through {@link TwilioGateway}. When Twilio runs in
+ * placeholder mode those channels are recorded as skipped so campaign sends
+ * fall back to email-only without losing history.
  */
 @Service
 @Slf4j
 public class MessageDeliveryService {
 
     private final JavaMailSender mailSender;
+    private final TwilioGateway twilioGateway;
 
     @Value("${donorly.mail.from-address}")
     private String fromAddress;
@@ -25,8 +28,9 @@ public class MessageDeliveryService {
     @Value("${donorly.mail.from-name:Donorly}")
     private String fromName;
 
-    public MessageDeliveryService(JavaMailSender mailSender) {
+    public MessageDeliveryService(JavaMailSender mailSender, TwilioGateway twilioGateway) {
         this.mailSender = mailSender;
+        this.twilioGateway = twilioGateway;
     }
 
     public DeliveryResult deliver(String channel, String recipient, String subject, String body) {
@@ -39,13 +43,26 @@ public class MessageDeliveryService {
         }
         return switch (parsed) {
             case EMAIL -> sendEmail(recipient, subject, body);
-            case SMS -> {
-                // No SMS provider wired yet — report as sent so drafts are not lost.
-                // Do not log recipient or body: message content and phone numbers are PII.
-                log.info("[COMM-SMS stub] message accepted ({} chars)", body != null ? body.length() : 0);
-                yield DeliveryResult.sent();
-            }
+            case SMS -> viaTwilio("SMS", () -> twilioGateway.sendSms(recipient, body));
+            case WHATSAPP -> viaTwilio("WhatsApp", () -> twilioGateway.sendWhatsApp(recipient, body));
+            case ROBOCALL -> viaTwilio("Robocall", () -> twilioGateway.robocall(recipient, body));
         };
+    }
+
+    private DeliveryResult viaTwilio(String label, java.util.function.Supplier<String> send) {
+        if (!twilioGateway.isLive()) {
+            // Placeholder mode: keep the record, mark it skipped.
+            log.info("[COMM-{}] Twilio not configured — message skipped", label);
+            return DeliveryResult.skipped("Twilio live account is not active");
+        }
+        try {
+            String sid = send.get();
+            log.info("[COMM-{}] sent via Twilio", label);
+            return DeliveryResult.sent(sid);
+        } catch (Exception e) {
+            log.error("[COMM-{}] delivery failed: {}", label, e.getMessage());
+            return DeliveryResult.failed(e.getMessage());
+        }
     }
 
     private DeliveryResult sendEmail(String to, String subject, String body) {
@@ -65,13 +82,21 @@ public class MessageDeliveryService {
         }
     }
 
-    public record DeliveryResult(boolean success, String errorMessage) {
+    public record DeliveryResult(boolean success, boolean skipped, String errorMessage, String externalId) {
         static DeliveryResult sent() {
-            return new DeliveryResult(true, null);
+            return new DeliveryResult(true, false, null, null);
+        }
+
+        static DeliveryResult sent(String externalId) {
+            return new DeliveryResult(true, false, null, externalId);
+        }
+
+        static DeliveryResult skipped(String reason) {
+            return new DeliveryResult(false, true, reason, null);
         }
 
         static DeliveryResult failed(String message) {
-            return new DeliveryResult(false, message);
+            return new DeliveryResult(false, false, message, null);
         }
     }
 }

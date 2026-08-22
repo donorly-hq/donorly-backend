@@ -42,17 +42,26 @@ public class DonorController {
     /**
      * Without {@code page}, returns the full list (legacy behavior, used by dropdowns).
      * With {@code page}, returns a {@code PageResponse} envelope; {@code q} filters by
-     * name/email/phone/city.
+     * name/email/phone/city and the remaining params are optional server-side filters.
      */
     @GetMapping
     @PreAuthorize("hasAuthority('donors.read')")
     public Object list(@RequestParam(required = false) Integer page,
                        @RequestParam(defaultValue = "50") int size,
-                       @RequestParam(required = false) String q) {
+                       @RequestParam(required = false) String q,
+                       @RequestParam(required = false) UUID tagId,
+                       @RequestParam(required = false) String state,
+                       @RequestParam(required = false) String bucket,
+                       @RequestParam(required = false) String compliance,
+                       @RequestParam(required = false) java.math.BigDecimal minAmount,
+                       @RequestParam(required = false) java.math.BigDecimal maxAmount,
+                       @RequestParam(defaultValue = "false") boolean majorOnly) {
         if (page == null) {
             return donorService.list().stream().map(DonorResponse::from).toList();
         }
-        return donorService.page(page, size, q).map(DonorResponse::from);
+        var filter = new org.donorly.backend.dto.DonorFilter(
+                tagId, state, bucket, compliance, minAmount, maxAmount, majorOnly);
+        return donorService.page(page, size, q, filter).map(DonorResponse::from);
     }
 
     @GetMapping("/mine")

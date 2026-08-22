@@ -45,6 +45,7 @@ public class DashboardService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final CampaignProgressService campaignProgressService;
+    private final org.donorly.backend.repository.CampaignTargetRepository campaignTargetRepository;
 
     public OrgDashboardResponse orgDashboard() {
         UUID orgId = TenantContext.requireOrganizationId();
@@ -239,6 +240,11 @@ public class DashboardService {
         BigDecimal pledged = progress.pledged();
         BigDecimal collected = progress.collected();
         int pledgeCount = progress.pledgeCount();
+        // Live countdown source: days from today until end date, floored at 0.
+        Integer daysRemaining = campaign.getEndDate() != null
+                ? (int) Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), campaign.getEndDate()))
+                : null;
+        int donorsTargeted = campaignTargetRepository.resolveTargetedDonorIds(campaignId, orgId).size();
         return new CampaignDashboardResponse(
                 campaign.getId(),
                 campaign.getName(),
@@ -246,7 +252,12 @@ public class DashboardService {
                 pledged,
                 collected,
                 campaign.getGoalAmount().subtract(collected),
-                pledgeCount
+                pledgeCount,
+                campaign.getStatus(),
+                campaign.getStartDate(),
+                campaign.getEndDate(),
+                daysRemaining,
+                donorsTargeted
         );
     }
 

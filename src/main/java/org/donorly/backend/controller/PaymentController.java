@@ -19,6 +19,14 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final org.donorly.backend.service.StripeCheckoutService stripeCheckoutService;
+
+    /** Placeholder-mode indicator: the portal shows a "not active" notice when false. */
+    @GetMapping("/gateway-status")
+    @PreAuthorize("hasAuthority('payments.manage')")
+    public java.util.Map<String, Boolean> gatewayStatus() {
+        return java.util.Map.of("stripeLive", stripeCheckoutService.isLive());
+    }
 
     /** Without {@code page}, returns the full list (legacy behavior); with it, a page envelope. */
     @GetMapping

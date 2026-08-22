@@ -7,6 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -44,4 +45,18 @@ public class PledgeCard extends AuditableEntity {
 
     @Column(name = "verification_status", nullable = false)
     private String verificationStatus = "pending";
+
+    /** Staff member responsible for chasing this card (required by workflow). */
+    @Column(name = "point_of_contact_user_id")
+    private UUID pointOfContactUserId;
+
+    @Column(name = "follow_up_count", nullable = false)
+    private int followUpCount = 0;
+
+    /** When the card entered the pending queue — drives the 24h auto-approve. */
+    @Column(name = "pending_since")
+    private Instant pendingSince;
+
+    /** Import batch label, e.g. "Pilot 1200". */
+    private String batch;
 }

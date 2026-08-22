@@ -6,7 +6,9 @@ package org.donorly.backend.model;
  */
 public enum CommunicationChannel {
     EMAIL("email"),
-    SMS("sms");
+    SMS("sms"),
+    WHATSAPP("whatsapp"),
+    ROBOCALL("robocall");
 
     private final String value;
 

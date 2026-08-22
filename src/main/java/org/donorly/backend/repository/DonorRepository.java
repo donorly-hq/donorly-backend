@@ -12,10 +12,25 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface DonorRepository extends JpaRepository<Donor, UUID> {
+public interface DonorRepository extends JpaRepository<Donor, UUID>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<Donor> {
     List<Donor> findByOrganizationIdAndDeletedAtIsNull(UUID organizationId);
     Optional<Donor> findByIdAndOrganizationId(UUID id, UUID organizationId);
     long countByOrganizationIdAndDeletedAtIsNull(UUID organizationId);
+
+    /**
+     * Cross-org lookup by phone digits for inbound Twilio webhooks (no tenant
+     * context on public routes). Numbers are compared digits-only so formatting
+     * differences ("+1 (555) ..." vs "555...") still match.
+     */
+    @Query(value = """
+            select * from donors d
+            where d.deleted_at is null
+              and regexp_replace(coalesce(d.phone, ''), '\\D', '', 'g') <> ''
+              and regexp_replace(coalesce(d.phone, ''), '\\D', '', 'g')
+                  = regexp_replace(:digits, '\\D', '', 'g')
+            """, nativeQuery = true)
+    List<Donor> findByPhoneDigits(@Param("digits") String digits);
 
     /** Past givers with no payment since {@code cutoff} — lapsed-donor signal. */
     @Query("""

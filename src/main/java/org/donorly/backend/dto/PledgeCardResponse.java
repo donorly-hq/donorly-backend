@@ -15,6 +15,11 @@ public record PledgeCardResponse(
         String paymentMethod,
         String notes,
         String verificationStatus,
+        UUID pointOfContactUserId,
+        String pointOfContactName,
+        int followUpCount,
+        Instant pendingSince,
+        String batch,
         UUID createdBy,
         Instant createdAt
 ) {

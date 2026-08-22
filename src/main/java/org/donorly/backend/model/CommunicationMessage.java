@@ -29,6 +29,17 @@ public class CommunicationMessage extends AuditableEntity {
     @Column(name = "donor_id")
     private UUID donorId;
 
+    @Column(name = "campaign_id")
+    private UUID campaignId;
+
+    /** outbound | inbound */
+    @Column(nullable = false)
+    private String direction = "outbound";
+
+    /** Provider-side message id (e.g. Twilio SID) for webhook correlation. */
+    @Column(name = "external_id")
+    private String externalId;
+
     @Column(name = "template_id")
     private UUID templateId;
 

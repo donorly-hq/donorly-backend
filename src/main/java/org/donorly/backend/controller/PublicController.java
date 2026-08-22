@@ -24,6 +24,54 @@ import java.util.UUID;
 public class PublicController {
 
     private final PublicPortalService publicPortalService;
+    private final org.donorly.backend.service.StripeCheckoutService stripeCheckoutService;
+    private final org.donorly.backend.service.TwilioInboundService twilioInboundService;
+
+    /** Whether online card payments are live (drives the public "Pay now" button). */
+    @GetMapping("/stripe/status")
+    public java.util.Map<String, Boolean> stripeStatus() {
+        return java.util.Map.of("live", stripeCheckoutService.isLive());
+    }
+
+    /** Starts a Stripe Checkout for a direct campaign donation; returns the hosted URL. */
+    @PostMapping("/campaigns/{campaignId}/checkout")
+    public java.util.Map<String, String> checkout(
+            @PathVariable UUID campaignId,
+            @Valid @RequestBody org.donorly.backend.dto.PublicCheckoutRequest request) {
+        String url = stripeCheckoutService.checkout(
+                campaignId, request.amount(), request.donorName(), request.donorEmail());
+        return java.util.Map.of("url", url);
+    }
+
+    /** Stripe webhook — signature-verified inside the service. */
+    @PostMapping("/stripe/webhook")
+    public void stripeWebhook(@RequestBody String payload,
+                              @org.springframework.web.bind.annotation.RequestHeader(
+                                      value = "Stripe-Signature", required = false) String signature) {
+        stripeCheckoutService.handleWebhook(payload, signature);
+    }
+
+    /**
+     * Twilio inbound SMS/WhatsApp webhook (form-encoded). Returns TwiML so the
+     * reply goes straight back to the donor over the same channel.
+     */
+    @PostMapping(value = "/twilio/inbound",
+            consumes = org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = org.springframework.http.MediaType.APPLICATION_XML_VALUE)
+    public String twilioInbound(
+            @org.springframework.web.bind.annotation.RequestParam(value = "From", required = false) String from,
+            @org.springframework.web.bind.annotation.RequestParam(value = "Body", required = false) String body,
+            @org.springframework.web.bind.annotation.RequestParam(value = "MessageSid", required = false) String sid) {
+        String reply = twilioInboundService.handleInbound(from, body, sid);
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Message>"
+                + escapeXml(reply) + "</Message></Response>";
+    }
+
+    private static String escapeXml(String value) {
+        return value == null ? "" : value
+                .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&apos;");
+    }
 
     @GetMapping("/thermometer/{campaignId}")
     public PublicThermometerResponse thermometer(@PathVariable UUID campaignId) {

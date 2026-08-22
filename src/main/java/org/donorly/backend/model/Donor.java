@@ -30,6 +30,26 @@ public class Donor extends AuditableEntity {
 
     private String city;
 
+    private String state;
+
+    @Column(columnDefinition = "text")
+    private String address;
+
+    /** Point of contact — the staff member responsible for this donor. */
+    @Column(name = "assigned_to_user_id")
+    private UUID assignedToUserId;
+
+    @Column(name = "is_major_donor", nullable = false)
+    private boolean majorDonor = false;
+
+    /** confirmed | potential | re_registering */
+    @Column(nullable = false)
+    private String bucket = "confirmed";
+
+    /** ok | non_compliant | claims_paid | non_responsive */
+    @Column(name = "compliance_status", nullable = false)
+    private String complianceStatus = "ok";
+
     @Column(name = "donor_type", nullable = false)
     private String donorType = "individual";
 

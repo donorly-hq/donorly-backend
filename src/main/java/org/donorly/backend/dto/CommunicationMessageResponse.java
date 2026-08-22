@@ -15,6 +15,8 @@ public record CommunicationMessageResponse(
         String body,
         String status,
         String errorMessage,
+        String direction,       // outbound | inbound
+        UUID campaignId,
         Instant sentAt,
         Instant createdAt
 ) {

@@ -11,4 +11,9 @@ public interface PledgeCardRepository extends JpaRepository<PledgeCard, UUID> {
     List<PledgeCard> findByOrganizationId(UUID organizationId);
     List<PledgeCard> findByOrganizationIdAndVerificationStatus(UUID organizationId, String verificationStatus);
     Optional<PledgeCard> findByIdAndOrganizationId(UUID id, UUID organizationId);
+    List<PledgeCard> findByOrganizationIdAndDonorIdAndVerificationStatus(
+            UUID organizationId, UUID donorId, String verificationStatus);
+    /** Cards sitting in the pending queue longer than {@code cutoff} — 24h auto-approve sweep. */
+    List<PledgeCard> findByVerificationStatusAndPendingSinceBefore(
+            String verificationStatus, java.time.Instant cutoff);
 }

@@ -14,15 +14,22 @@ public record DonorResponse(
         String email,
         String phone,
         String city,
+        String state,
+        String address,
         String donorType,
         String status,
         BigDecimal lifetimeGiving,
+        UUID assignedToUserId,
+        boolean majorDonor,
+        String bucket,
+        String complianceStatus,
         Instant createdAt,
         Instant updatedAt
 ) {
     public static DonorResponse from(Donor d) {
         return new DonorResponse(d.getId(), d.getOrganizationId(), d.getFullName(), d.getEmail(),
-                d.getPhone(), d.getCity(), d.getDonorType(), d.getStatus(), d.getLifetimeGiving(),
-                d.getCreatedAt(), d.getModifiedAt());
+                d.getPhone(), d.getCity(), d.getState(), d.getAddress(), d.getDonorType(),
+                d.getStatus(), d.getLifetimeGiving(), d.getAssignedToUserId(), d.isMajorDonor(),
+                d.getBucket(), d.getComplianceStatus(), d.getCreatedAt(), d.getModifiedAt());
     }
 }

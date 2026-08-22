@@ -26,5 +26,9 @@ public record PledgeCardRequest(
         String extractedJson,       // raw AI extraction, kept for the audit trail
         @NotNull @Positive BigDecimal amount,
         String paymentMethod,
-        String notes
+        String notes,
+
+        /* ── workflow fields ───────────────────────────────────── */
+        UUID pointOfContactUserId,  // defaults to the creating user when omitted
+        String batch                // pilot batch label, e.g. "Pilot 1200"
 ) {}
