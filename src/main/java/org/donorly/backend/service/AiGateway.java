@@ -1,37 +1,38 @@
 package org.donorly.backend.service;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MimeType;
+import org.springframework.util.MimeTypeUtils;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
+import java.util.Base64;
 
 /**
- * Thin wrapper around the OpenAI Chat Completions API.
+ * Gateway to the OpenAI Chat API via Spring AI's {@link ChatClient}.
  *
  * Set {@code OPENAI_API_KEY} as an environment variable (or in application.properties)
  * to enable real AI calls. When the key is absent the gateway returns a clearly-labelled
  * stub response so all other code paths can be exercised in development.
+ *
+ * The model is built here (not via Spring AI autoconfiguration) for two reasons:
+ * the API key must be trimmed (prod secrets may carry a trailing newline), and the
+ * application context must start cleanly with no key at all (stub mode, tests).
  */
 @Component
 @Slf4j
 public class AiGateway {
 
-    private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     private final String apiKey;
     private final String model;
-    private final HttpClient http;
-    private final ObjectMapper objectMapper;
+    private final ChatClient chatClient;
 
     public AiGateway(
             @Value("${donorly.ai.openai-api-key:}") String apiKey,
@@ -39,8 +40,7 @@ public class AiGateway {
         // Trim to survive secrets stored with a trailing newline.
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
-        this.http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
-        this.objectMapper = new ObjectMapper();
+        this.chatClient = buildChatClient();
     }
 
     public boolean isEnabled() {
@@ -60,16 +60,12 @@ public class AiGateway {
             return buildStubResponse(userPrompt);
         }
         try {
-            Map<String, Object> body = Map.of(
-                    "model", model,
-                    "messages", List.of(
-                            Map.of("role", "system", "content", systemPrompt),
-                            Map.of("role", "user", "content", userPrompt)
-                    ),
-                    "max_tokens", 600,
-                    "temperature", 0.4
-            );
-            return send(body);
+            return call(chatClient.prompt()
+                    .system(systemPrompt)
+                    .user(userPrompt)
+                    .options(OpenAiChatOptions.builder()
+                            .maxTokens(600)
+                            .temperature(0.4)));
         } catch (AiUnavailableException e) {
             return e.getMessage();
         } catch (Exception e) {
@@ -90,22 +86,18 @@ public class AiGateway {
         if (!isEnabled()) {
             throw new AiUnavailableException("AI is not configured on this server (missing OpenAI API key).");
         }
+        DataUrl image = parseDataUrl(imageDataUrl);
         try {
-            Map<String, Object> body = Map.of(
-                    "model", model,
-                    "messages", List.of(
-                            Map.of("role", "system", "content", systemPrompt),
-                            Map.of("role", "user", "content", List.of(
-                                    Map.of("type", "text", "text", userPrompt),
-                                    Map.of("type", "image_url", "image_url",
-                                            Map.of("url", imageDataUrl, "detail", "high"))
-                            ))
-                    ),
-                    "max_tokens", 500,
-                    "temperature", 0,
-                    "response_format", Map.of("type", "json_object")
-            );
-            return send(body);
+            return call(chatClient.prompt()
+                    .system(systemPrompt)
+                    .user(u -> u.text(userPrompt)
+                            .media(image.mimeType(), new ByteArrayResource(image.bytes())))
+                    .options(OpenAiChatOptions.builder()
+                            .maxTokens(500)
+                            .temperature(0.0)
+                            .responseFormat(OpenAiChatModel.ResponseFormat.builder()
+                                    .type(OpenAiChatModel.ResponseFormat.Type.JSON_OBJECT)
+                                    .build())));
         } catch (AiUnavailableException e) {
             throw e;
         } catch (Exception e) {
@@ -114,29 +106,59 @@ public class AiGateway {
         }
     }
 
-    private String send(Map<String, Object> body) throws Exception {
-        String bodyJson = objectMapper.writeValueAsString(body);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(OPENAI_URL))
-                .timeout(TIMEOUT)
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
-                .build();
-
-        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            log.error("[AI] OpenAI returned HTTP {}: {}", response.statusCode(), response.body());
-            throw new AiUnavailableException("AI service returned an error (HTTP " + response.statusCode() + "). Please try again.");
+    /** Executes the prepared request and normalizes Spring AI failures into our exception. */
+    private String call(ChatClient.ChatClientRequestSpec spec) {
+        String content;
+        try {
+            content = spec.call().content();
+        } catch (Exception e) {
+            // Spring AI surfaces HTTP errors with the status and body in the message —
+            // keep that visible for diagnosis (that is how the 429 billing issue was found).
+            log.error("[AI] OpenAI call failed: {}", e.getMessage());
+            throw new AiUnavailableException("AI service returned an error. Please try again.");
         }
-
-        OpenAiResponse parsed = objectMapper.readValue(response.body(), OpenAiResponse.class);
-        if (parsed.choices() == null || parsed.choices().isEmpty()) {
+        if (content == null || content.isBlank()) {
             throw new AiUnavailableException("AI returned an empty response.");
         }
-        return parsed.choices().get(0).message().content();
+        return content;
+    }
+
+    private ChatClient buildChatClient() {
+        // Placeholder key keeps construction valid in stub mode; isEnabled() guards all calls.
+        String effectiveKey = isEnabled() ? apiKey : "stub-mode-no-key";
+
+        OpenAiChatOptions defaults = OpenAiChatOptions.builder()
+                .apiKey(effectiveKey)
+                .model(model)
+                .timeout(TIMEOUT)
+                .maxRetries(2)
+                .build();
+
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .options(defaults)
+                .build();
+
+        return ChatClient.builder(chatModel).build();
+    }
+
+    /** Splits a {@code data:image/...;base64,....} URL into mime type + raw bytes. */
+    private static DataUrl parseDataUrl(String dataUrl) {
+        int comma = dataUrl.indexOf(',');
+        if (!dataUrl.startsWith("data:") || comma < 0) {
+            throw new AiUnavailableException("Expected an image data URL (data:image/...).");
+        }
+        String header = dataUrl.substring(5, comma); // e.g. "image/jpeg;base64"
+        String mime = header.split(";")[0];
+        MimeType mimeType = mime.isBlank() ? MimeTypeUtils.IMAGE_JPEG : MimeTypeUtils.parseMimeType(mime);
+        try {
+            byte[] bytes = Base64.getDecoder().decode(dataUrl.substring(comma + 1));
+            return new DataUrl(mimeType, bytes);
+        } catch (IllegalArgumentException e) {
+            throw new AiUnavailableException("Could not decode the image data.");
+        }
+    }
+
+    private record DataUrl(MimeType mimeType, byte[] bytes) {
     }
 
     /** Thrown when the AI backend is unconfigured or unreachable. */
@@ -161,17 +183,5 @@ public class AiGateway {
                 To enable real AI-powered insights, add your OpenAI API key to the server environment:
                   OPENAI_API_KEY=sk-...
                 """;
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record OpenAiResponse(List<Choice> choices) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record Choice(Message message) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record Message(String role, String content) {
     }
 }
