@@ -38,9 +38,12 @@ public class PledgeReminderService {
     private final DonorRepository donorRepository;
     private final CampaignRepository campaignRepository;
     private final OrganizationRepository organizationRepository;
+    private final org.donorly.backend.repository.OrganizationSettingsRepository settingsRepository;
     private final CommunicationMessageRepository messageRepository;
     private final EmailService emailService;
     private final AuditService auditService;
+    private final DonorActionTokenService tokenService;
+    private final ReminderEmailComposer composer;
 
     /** Master switch so the scheduler can be disabled per environment. */
     @Value("${donorly.reminders.enabled:true}")
@@ -126,6 +129,9 @@ public class PledgeReminderService {
         log.info("Pledge reminder job: {} pledge(s) due", due.size());
         int sent = 0;
         for (Pledge pledge : due) {
+            if (pledge.isRemindersPaused()) {
+                continue; // Donor asked us to stop — a human owns this one now.
+            }
             Donor donor = donorRepository.findById(pledge.getDonorId()).orElse(null);
             if (donor == null || donor.getDeletedAt() != null
                     || donor.getEmail() == null || donor.getEmail().isBlank()) {
@@ -179,21 +185,40 @@ public class PledgeReminderService {
         return value != null ? value : BigDecimal.ZERO;
     }
 
-    /** Builds the email, sends it, records it in message history, and stamps the pledge. */
+    /**
+     * Composes the email (AI-personalized when enabled, with donor action links),
+     * sends it, records it in message history, and stamps the pledge.
+     */
     private void deliver(Pledge pledge, Donor donor, UUID sentBy) {
-        Email email = buildEmail(pledge, donor);
-        String subject = email.subject();
-        String body = email.body();
+        String orgName = organizationRepository.findById(pledge.getOrganizationId())
+                .map(Organization::getName).orElse("Your organization");
+        String campaignName = campaignRepository.findById(pledge.getCampaignId())
+                .map(Campaign::getName).orElse("our campaign");
+        boolean aiEnabled = settingsRepository.findById(pledge.getOrganizationId())
+                .map(org.donorly.backend.model.OrganizationSettings::isAiEnabled).orElse(false);
 
-        emailService.sendText(donor.getEmail(), subject, body);
+        BigDecimal outstanding = nz(pledge.getAmount())
+                .subtract(nz(pledge.getCollectedAmount())).max(BigDecimal.ZERO);
+        long daysPending = pledge.getCreatedAt() != null
+                ? Duration.between(pledge.getCreatedAt(), Instant.now()).toDays() : 0;
+
+        var token = tokenService.createForPledge(pledge);
+        var email = composer.compose(
+                new ReminderEmailComposer.ReminderContext(
+                        orgName, donor.getFullName(), outstanding, campaignName,
+                        daysPending, pledge.getLastReminderAt() == null ? 1 : 2, aiEnabled),
+                token.getToken());
+
+        emailService.sendHtml(donor.getEmail(), email.subject(), email.htmlBody());
 
         CommunicationMessage message = new CommunicationMessage();
         message.setOrganizationId(pledge.getOrganizationId());
         message.setChannel("email");
         message.setRecipient(donor.getEmail());
         message.setDonorId(donor.getId());
-        message.setSubject(subject);
-        message.setBody(body);
+        message.setCampaignId(pledge.getCampaignId());
+        message.setSubject(email.subject());
+        message.setBody(email.htmlBody());
         message.setStatus("sent");
         message.setSentBy(sentBy);
         message.setSentAt(Instant.now());

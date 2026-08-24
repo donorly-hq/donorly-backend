@@ -8,6 +8,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -59,4 +60,17 @@ public class PledgeCard extends AuditableEntity {
 
     /** Import batch label, e.g. "Pilot 1200". */
     private String batch;
+
+    /* ── automated donor reminders ─────────────────────────── */
+
+    @Column(name = "last_reminder_at")
+    private Instant lastReminderAt;
+
+    /** Set when the donor clicks "stop reminding me" — a human takes over. */
+    @Column(name = "reminders_paused", nullable = false)
+    private boolean remindersPaused = false;
+
+    /** Date the donor promised to pay by (from the response page). */
+    @Column(name = "promised_date")
+    private LocalDate promisedDate;
 }

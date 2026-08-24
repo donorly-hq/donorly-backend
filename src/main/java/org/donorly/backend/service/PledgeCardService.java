@@ -69,6 +69,40 @@ public class PledgeCardService {
         return autoApprovePolicy();
     }
 
+    /** Current automated reminder policy: {enabled, intervalDays, maxAttempts}. */
+    public java.util.Map<String, Object> reminderPolicy() {
+        return settingsRepository.findById(TenantContext.requireOrganizationId())
+                .<java.util.Map<String, Object>>map(s -> java.util.Map.of(
+                        "enabled", s.isPledgeCardRemindersEnabled(),
+                        "intervalDays", s.getPledgeCardReminderIntervalDays(),
+                        "maxAttempts", s.getPledgeCardReminderMax()))
+                .orElse(java.util.Map.of("enabled", true, "intervalDays", 3, "maxAttempts", 3));
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> updateReminderPolicy(boolean enabled, Integer intervalDays,
+                                                              Integer maxAttempts) {
+        var settings = settingsRepository.findById(TenantContext.requireOrganizationId())
+                .orElseThrow(() -> new NotFoundException("Organization settings not found"));
+        settings.setPledgeCardRemindersEnabled(enabled);
+        if (intervalDays != null) {
+            if (intervalDays < 1 || intervalDays > 60) {
+                throw new BadRequestException("Reminder interval must be between 1 and 60 days");
+            }
+            settings.setPledgeCardReminderIntervalDays(intervalDays);
+        }
+        if (maxAttempts != null) {
+            if (maxAttempts < 1 || maxAttempts > 10) {
+                throw new BadRequestException("Reminder attempts must be between 1 and 10");
+            }
+            settings.setPledgeCardReminderMax(maxAttempts);
+        }
+        settingsRepository.save(settings);
+        auditService.record("pledge_card.reminder_policy", "organization_settings",
+                settings.getOrganizationId());
+        return reminderPolicy();
+    }
+
     public List<PledgeCardResponse> list(PledgeCardFilter filter) {
         UUID orgId = TenantContext.requireOrganizationId();
         return pledgeCardRepository.findByOrganizationId(orgId).stream()

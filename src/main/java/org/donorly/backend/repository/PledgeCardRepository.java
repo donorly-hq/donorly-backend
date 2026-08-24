@@ -16,4 +16,6 @@ public interface PledgeCardRepository extends JpaRepository<PledgeCard, UUID> {
     /** Cards sitting in the pending queue longer than {@code cutoff} — 24h auto-approve sweep. */
     List<PledgeCard> findByVerificationStatusAndPendingSinceBefore(
             String verificationStatus, java.time.Instant cutoff);
+    /** Reminder sweep candidates across all orgs (pending / needs_verification). */
+    List<PledgeCard> findByVerificationStatusIn(java.util.Collection<String> statuses);
 }

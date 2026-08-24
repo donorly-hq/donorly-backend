@@ -67,6 +67,21 @@ public class PledgeCardController {
         return pledgeCardService.updateAutoApprovePolicy(autoApprove, hours);
     }
 
+    @GetMapping("/reminder-policy")
+    @PreAuthorize("hasAuthority('pledges.read')")
+    public Map<String, Object> reminderPolicy() {
+        return pledgeCardService.reminderPolicy();
+    }
+
+    @PutMapping("/reminder-policy")
+    @PreAuthorize("hasAuthority('pledges.write')")
+    public Map<String, Object> updateReminderPolicy(@RequestBody Map<String, Object> body) {
+        boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
+        Integer intervalDays = body.get("intervalDays") instanceof Number n ? n.intValue() : null;
+        Integer maxAttempts = body.get("maxAttempts") instanceof Number n ? n.intValue() : null;
+        return pledgeCardService.updateReminderPolicy(enabled, intervalDays, maxAttempts);
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('pledges.read')")
     public PledgeCardResponse get(@PathVariable UUID id) {

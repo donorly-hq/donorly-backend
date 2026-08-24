@@ -54,4 +54,8 @@ public class Pledge extends AuditableEntity {
 
     @Column(name = "last_reminder_at")
     private java.time.Instant lastReminderAt;
+
+    /** Set when the donor clicks "stop reminding me" — a human takes over. */
+    @Column(name = "reminders_paused", nullable = false)
+    private boolean remindersPaused = false;
 }

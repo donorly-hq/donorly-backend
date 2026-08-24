@@ -33,4 +33,13 @@ public class OrganizationSettings extends AuditableEntity {
 
     @Column(name = "pledge_card_auto_approve_hours", nullable = false)
     private int pledgeCardAutoApproveHours = 24;
+
+    @Column(name = "pledge_card_reminders_enabled", nullable = false)
+    private boolean pledgeCardRemindersEnabled = true;
+
+    @Column(name = "pledge_card_reminder_interval_days", nullable = false)
+    private int pledgeCardReminderIntervalDays = 3;
+
+    @Column(name = "pledge_card_reminder_max", nullable = false)
+    private int pledgeCardReminderMax = 3;
 }

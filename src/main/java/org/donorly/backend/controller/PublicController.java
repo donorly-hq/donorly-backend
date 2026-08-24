@@ -26,6 +26,7 @@ public class PublicController {
     private final PublicPortalService publicPortalService;
     private final org.donorly.backend.service.StripeCheckoutService stripeCheckoutService;
     private final org.donorly.backend.service.TwilioInboundService twilioInboundService;
+    private final org.donorly.backend.service.DonorResponseService donorResponseService;
 
     /** Whether online card payments are live (drives the public "Pay now" button). */
     @GetMapping("/stripe/status")
@@ -71,6 +72,20 @@ public class PublicController {
         return value == null ? "" : value
                 .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 .replace("\"", "&quot;").replace("'", "&apos;");
+    }
+
+    /** Context for the donor response page (from a reminder email's action link). */
+    @GetMapping("/respond/{token}")
+    public org.donorly.backend.dto.DonorRespondContextResponse respondContext(@PathVariable String token) {
+        return donorResponseService.context(token);
+    }
+
+    /** Applies the donor's answer: paid / promise a date / stop reminders. */
+    @PostMapping("/respond/{token}")
+    public java.util.Map<String, String> respond(
+            @PathVariable String token,
+            @Valid @RequestBody org.donorly.backend.dto.DonorRespondRequest request) {
+        return java.util.Map.of("message", donorResponseService.respond(token, request));
     }
 
     @GetMapping("/thermometer/{campaignId}")
