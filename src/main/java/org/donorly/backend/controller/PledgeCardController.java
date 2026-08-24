@@ -23,6 +23,7 @@ public class PledgeCardController {
 
     private final PledgeCardService pledgeCardService;
     private final PledgeCardScanService pledgeCardScanService;
+    private final org.donorly.backend.service.PledgeCardImportService pledgeCardImportService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('pledges.read')")
@@ -76,6 +77,14 @@ public class PledgeCardController {
     @PreAuthorize("hasAuthority('pledges.write')")
     public ResponseEntity<PledgeCardResponse> create(@Valid @RequestBody PledgeCardRequest request) {
         return ResponseEntity.ok(pledgeCardService.create(request));
+    }
+
+    /** Bulk import from a spreadsheet: rows become cards in the normal pending queue. */
+    @PostMapping("/import")
+    @PreAuthorize("hasAuthority('pledges.write')")
+    public org.donorly.backend.dto.PledgeCardImportResult importCards(
+            @Valid @RequestBody org.donorly.backend.dto.PledgeCardImportRequest request) {
+        return pledgeCardImportService.importCards(request);
     }
 
     /** Photo of a paper pledge card in, AI-suggested field values out. Nothing is saved yet. */

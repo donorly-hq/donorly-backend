@@ -43,6 +43,7 @@ public class PledgeCardScanService {
     private final OrganizationSettingsRepository settingsRepository;
     private final CampaignRepository campaignRepository;
     private final DonorMatchingService donorMatchingService;
+    private final CampaignMatchingService campaignMatchingService;
 
     // No ObjectMapper bean is exposed in this app; construct one like AiGateway does.
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -100,7 +101,7 @@ public class PledgeCardScanService {
         String donorEmail = text(node, "donor_email");
         String donorPhone = text(node, "donor_phone");
 
-        Campaign matchedCampaign = matchCampaign(campaigns, text(node, "campaign_name"));
+        Campaign matchedCampaign = campaignMatchingService.match(campaigns, text(node, "campaign_name"));
 
         Donor matchedDonor = null;
         if (donorName != null && !donorName.isBlank()) {
@@ -136,22 +137,6 @@ public class PledgeCardScanService {
             log.warn("[AI] Could not parse pledge card extraction as JSON: {}", raw);
             throw new BadRequestException("AI could not read this photo. Try a clearer, well-lit picture of the card.");
         }
-    }
-
-    private Campaign matchCampaign(List<Campaign> campaigns, String name) {
-        if (name == null || name.isBlank()) {
-            return null;
-        }
-        String needle = name.strip().toLowerCase();
-        return campaigns.stream()
-                .filter(c -> {
-                    String candidate = c.getName().strip().toLowerCase();
-                    return candidate.equals(needle)
-                            || candidate.contains(needle)
-                            || needle.contains(candidate);
-                })
-                .findFirst()
-                .orElse(null);
     }
 
     private String normalizePaymentMethod(String value) {
