@@ -1,7 +1,20 @@
+# Build + deploy for the backend. The substitutions below default to the DEV
+# environment; the PROD Cloud Build trigger overrides them (service name,
+# database, secrets, portal URL) so one file serves both environments.
 substitutions:
   _REGION: us-central1
   _REPO: donorly
   _SERVICE: donorly-backend
+  # Database (Railway Postgres) — PROD overrides _PGDATABASE (and password secret).
+  _PGHOST: hayabusa.proxy.rlwy.net
+  _PGPORT: "29331"
+  _PGDATABASE: railway
+  _PGUSER: postgres
+  _DB_PASSWORD_SECRET: donorly-db-password
+  _JWT_SECRET_NAME: donorly-jwt-secret
+  # The portal this backend serves (used in emails and links).
+  _APP_BASE_URL: https://donorly-portal-jyiyrqfy5q-uc.a.run.app
+  _MIN_INSTANCES: "0"
 
 steps:
   # Step 0: Build the Docker image
@@ -40,12 +53,12 @@ steps:
       - --port=8080
       - --memory=1Gi
       - --cpu=1
-      - --min-instances=0
+      - --min-instances=${_MIN_INSTANCES}
       - --max-instances=5
       - --set-env-vars=SPRING_PROFILES_ACTIVE=gcp
-      - --set-secrets=JWT_SECRET=donorly-jwt-secret:latest,PGPASSWORD=donorly-db-password:latest,MAIL_PASSWORD=donorly-mail-password:latest,OPENAI_API_KEY=donorly-openai-key:latest
-      - --set-env-vars=PGHOST=hayabusa.proxy.rlwy.net,PGPORT=29331,PGDATABASE=railway,PGUSER=postgres
-      - --set-env-vars=MAIL_USERNAME=sam@donorly.org,MAIL_FROM_NAME=Donorly,APP_BASE_URL=https://donorly-portal-jyiyrqfy5q-uc.a.run.app
+      - --set-secrets=JWT_SECRET=${_JWT_SECRET_NAME}:latest,PGPASSWORD=${_DB_PASSWORD_SECRET}:latest,MAIL_PASSWORD=donorly-mail-password:latest,OPENAI_API_KEY=donorly-openai-key:latest
+      - --set-env-vars=PGHOST=${_PGHOST},PGPORT=${_PGPORT},PGDATABASE=${_PGDATABASE},PGUSER=${_PGUSER}
+      - --set-env-vars=MAIL_USERNAME=sam@donorly.org,MAIL_FROM_NAME=Donorly,APP_BASE_URL=${_APP_BASE_URL}
       - --set-env-vars=DONORLY_GCS_BUCKET=donorly-app-501321-org-assets
 
 options:
